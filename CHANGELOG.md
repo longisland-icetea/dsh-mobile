@@ -7,6 +7,7 @@ Notable changes to DSH Mobile are recorded here. GitHub Releases remain the sour
 
 - Sync the browser tab title with the current session on the dedicated layout, matching the stock behavior (thanks @idoall for reporting #45).
 - Allow installed plugins' WebSocket endpoints through the gateway via admin-approved exact paths (e.g. `/sidebar/ws/terminal`), managed in the remote panel behind local-admin trust; built-in DSH paths keep working and everything else stays blocked (thanks @idoall for reporting #47).
+- Document remote notification limits: browser permission is per origin, OS toasts stay on the computer, and server-side channels (e.g. dsh-messager webhooks) are the reliable push path to the phone (thanks @idoall for reporting #46).
 
 ## 0.3.10 - 2026-09-07
 
