@@ -595,7 +595,7 @@ function installControl(): { remove: () => void; toggle: () => void; isOpen: () 
     saveWsPaths([...wsPathsCurrent, value])
   })
   const remoteWorkspace = element('section', 'dsh-mobile-control__remote-workspace')
-  remoteWorkspace.append(providerSetupHeader, remoteStatus, remoteAccess, remoteGuide, providerSetupBody, remoteActions, remoteQr, remoteManageRow, remoteDevicePanel, wsPathsSection)
+  remoteWorkspace.append(providerSetupHeader, remoteStatus, remoteAccess, remoteGuide, providerSetupBody, remoteActions, remoteQr, remoteManageRow, remoteDevicePanel)
   const diagnosticsView = element('div', 'dsh-mobile-control__view is-diagnostics'); diagnosticsView.hidden = true
   const diagnosticsIntro = element('p', 'dsh-mobile-control__intro'); diagnosticsIntro.textContent = t('diagnosticsIntro')
   const diagnosticsSummary = element('section', 'dsh-mobile-control__diagnostic-summary is-idle'); diagnosticsSummary.setAttribute('aria-live', 'polite')
@@ -621,7 +621,7 @@ function installControl(): { remove: () => void; toggle: () => void; isOpen: () 
   header.append(title, headerActions); actions.append(toggle, pair, linkPair)
   lanView.append(access, qrBox, status, extensionStatus, actions, manageRow, devicePanel)
   remoteView.append(remoteIntro, providerSection, remoteWorkspace)
-  diagnosticsView.append(diagnosticsIntro, diagnosticsSummary, diagnosticsToolbar, diagnosticsFeedback, diagnosticsChecks, diagnosticsDetails)
+  diagnosticsView.append(diagnosticsIntro, diagnosticsSummary, diagnosticsToolbar, diagnosticsFeedback, diagnosticsChecks, wsPathsSection, diagnosticsDetails)
   panel.append(header, releaseNotice, appDownload, switcher, lanView, remoteView, diagnosticsView); root.append(panel); document.body.append(root)
   let running = false
   let origin = ''
@@ -692,13 +692,14 @@ function installControl(): { remove: () => void; toggle: () => void; isOpen: () 
     diagnosticsEntry.setAttribute('aria-pressed', String(view === 'diagnostics'))
     diagnosticsEntry.textContent = view === 'diagnostics' ? t('back') : t('diagnostics')
     diagnosticsEntry.setAttribute('aria-label', view === 'diagnostics' ? t('backToMobile') : t('openDiagnostics'))
+    if (view === 'diagnostics' && !wsPathsLoaded) loadWsPaths()
     updatePlugin.hidden = view === 'diagnostics' || !pluginUpdateAvailable
     appDownload.hidden = view === 'diagnostics'
     switcher.hidden = view === 'diagnostics'
     title.textContent = view === 'lan' ? t('lanAccess') : view === 'remote' ? t('remoteAccess') : t('connectionDiagnostics')
   }
   lanTab.addEventListener('click', () => { selectView('lan') })
-  remoteTab.addEventListener('click', () => { selectView('remote'); loadRemote(); if (!wsPathsLoaded) loadWsPaths() })
+  remoteTab.addEventListener('click', () => { selectView('remote'); loadRemote() })
   const setOpen = (open: boolean): void => {
     panel.hidden = !open
     for (const trigger of document.querySelectorAll('.dsh-mobile-control__trigger')) trigger.setAttribute('aria-expanded', String(open))
