@@ -517,9 +517,14 @@ function installControl(): { remove: () => void; toggle: () => void; isOpen: () 
   const wsPathsInput = element('input', 'dsh-mobile-control__ws-paths-input'); wsPathsInput.type = 'text'; wsPathsInput.placeholder = t('wsPathsPlaceholder'); wsPathsInput.setAttribute('aria-label', t('wsPathsTitle'))
   const wsPathsAdd = element('button', 'dsh-mobile-control__secondary'); wsPathsAdd.type = 'button'; wsPathsAdd.textContent = t('wsPathsAdd')
   const wsPathsStatus = element('p', 'dsh-mobile-control__status'); wsPathsStatus.hidden = true; wsPathsStatus.setAttribute('aria-live', 'polite')
+  const wsPathsDetected = element('div', 'dsh-mobile-control__ws-paths-detected'); wsPathsDetected.hidden = true
+  const wsPathsDetectedTitle = element('p', 'dsh-mobile-control__intro'); wsPathsDetectedTitle.textContent = t('wsPathsDetected')
+  const wsPathsDetectedList = element('ul', 'dsh-mobile-control__ws-paths-list')
+  wsPathsDetected.append(wsPathsDetectedTitle, wsPathsDetectedList)
   wsPathsRow.append(wsPathsInput, wsPathsAdd)
-  wsPathsSection.append(wsPathsTitle, wsPathsIntro, wsPathsList, wsPathsRow, wsPathsStatus)
+  wsPathsSection.append(wsPathsTitle, wsPathsIntro, wsPathsList, wsPathsDetected, wsPathsRow, wsPathsStatus)
   let wsPathsCurrent: string[] = []
+  let wsPathsBlocked: { readonly path: string; readonly attempts: number }[] = []
   let wsPathsLoaded = false
   const renderWsPaths = (paths: readonly string[]): void => {
     wsPathsCurrent = [...paths]
@@ -536,11 +541,33 @@ function installControl(): { remove: () => void; toggle: () => void; isOpen: () 
       wsPathsList.append(item)
     }
   }
+  const renderWsBlocked = (blocked: readonly { readonly path: string; readonly attempts: number }[]): void => {
+    wsPathsDetectedList.replaceChildren()
+    wsPathsDetected.hidden = blocked.length === 0
+    for (const entry of blocked) {
+      if (wsPathsCurrent.includes(entry.path)) continue
+      const item = element('li', 'dsh-mobile-control__ws-paths-item')
+      const label = element('code'); label.textContent = `${entry.path} ×${String(entry.attempts)}`
+      const allow = element('button', 'dsh-mobile-control__secondary'); allow.type = 'button'; allow.textContent = t('wsPathsAllow'); allow.setAttribute('aria-label', `${t('wsPathsAllow')}: ${entry.path}`)
+      allow.addEventListener('click', () => { saveWsPaths([...wsPathsCurrent, entry.path]) })
+      item.append(label, allow)
+      wsPathsDetectedList.append(item)
+    }
+    if (wsPathsDetectedList.childElementCount === 0) wsPathsDetected.hidden = true
+  }
   const loadWsPaths = (): void => {
     void controlRequestJson('/api/mobile-access/remote/websocket-paths').then(data => {
       wsPathsLoaded = true
       wsPathsStatus.hidden = true
       renderWsPaths(Array.isArray(data.paths) ? data.paths.filter((entry): entry is string => typeof entry === 'string') : [])
+      void controlRequestJson('/api/mobile-access/remote/websocket-paths/blocked').then(blocked => {
+        const entries = Array.isArray(blocked.blocked) ? blocked.blocked : []
+        wsPathsBlocked = entries.filter((entry): entry is { path: string; attempts: number } =>
+          typeof entry === 'object' && entry !== null
+          && typeof (entry as { path?: unknown }).path === 'string'
+          && typeof (entry as { attempts?: unknown }).attempts === 'number')
+        renderWsBlocked(wsPathsBlocked)
+      }, () => { /* approved list already rendered; detected list stays hidden */ })
     }, error => {
       wsPathsStatus.hidden = false
       wsPathsStatus.textContent = t('requestFailed', { error: String(error) })
@@ -551,6 +578,7 @@ function installControl(): { remove: () => void; toggle: () => void; isOpen: () 
     void controlRequestJson('/api/mobile-access/remote/websocket-paths', { method: 'POST', body: JSON.stringify({ paths }) }).then(data => {
       wsPathsLoaded = true
       renderWsPaths(Array.isArray(data.paths) ? data.paths.filter((entry): entry is string => typeof entry === 'string') : [])
+      renderWsBlocked(wsPathsBlocked)
     }, error => {
       wsPathsStatus.hidden = false
       wsPathsStatus.textContent = t('requestFailed', { error: String(error) })

@@ -49,6 +49,7 @@ import {
   setSecurityHeaders,
   WS_PATHS,
 } from './http-security.js'
+import type { BlockedUpgradePathEntry, BlockedUpgradePathLog } from './websocket-paths.js'
 import {
   DSH_MOBILE_VERSION,
   MINIMUM_ANDROID_APP_VERSION,
@@ -808,6 +809,7 @@ export class MobileAccessGateway {
     private readonly extensions?: MobileAccessService,
     private readonly upstreamAuthenticatedUrl?: string,
     private readonly extraWebSocketPaths?: { has(pathname: string): boolean },
+    private readonly blockedUpgradeLog?: BlockedUpgradePathLog,
   ) {
     this.listenerTlsEnabled = config.tls.mode === 'provided'
     this.tlsEnabled = config.publicTls
@@ -2055,6 +2057,11 @@ export class MobileAccessGateway {
     })
   }
 
+  /** Snapshot of rejected upgrade paths for the approval UI (newest first). */
+  blockedUpgradePathReport(): BlockedUpgradePathEntry[] {
+    return this.blockedUpgradeLog?.report() ?? []
+  }
+
   private async handleUpgrade(request: IncomingMessage, client: Socket, head: Buffer): Promise<void> {
     const target = parseRequestTarget(request.url)
     const policy = this.requirePolicy()
@@ -2070,7 +2077,10 @@ export class MobileAccessGateway {
     // auth, Origin, and handshake checks below still apply to allowed paths.
     const upgradeAllowed = WS_PATHS.has(target.decodedPathname)
       || (this.extraWebSocketPaths?.has(target.decodedPathname) ?? false)
-    if (!upgradeAllowed) throw new HttpError(404, 'not_found')
+    if (!upgradeAllowed) {
+      this.blockedUpgradeLog?.record(target.decodedPathname)
+      throw new HttpError(404, 'not_found')
+    }
     if (request.method !== 'GET' || headerValue(request.headers, 'upgrade')?.toLowerCase() !== 'websocket'
       || !hasToken(headerValue(request.headers, 'connection'), 'upgrade')) {
       throw new HttpError(400, 'bad_request')

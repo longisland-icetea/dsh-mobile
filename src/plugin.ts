@@ -31,7 +31,7 @@ import {
   sendJson,
 } from './http-security.js'
 import { JsonDeviceStore } from './storage.js'
-import { WebSocketPathStore } from './websocket-paths.js'
+import { BlockedUpgradePathLog, WebSocketPathStore } from './websocket-paths.js'
 import { FunnelController, funnelExecutable } from './funnel.js'
 import { CpolarController } from './cpolar.js'
 import { CpolarComponentManager, type CpolarComponentStatus } from './cpolar-component.js'
@@ -339,6 +339,7 @@ export async function apply(ctx: Context, config: PluginConfig): Promise<void> {
   // gateway: admin approvals apply immediately, no restart required.
   const webSocketPaths = new WebSocketPathStore(join(stateDirectory, 'websocket-paths.json'))
   await webSocketPaths.load()
+  const blockedUpgradePaths = new BlockedUpgradePathLog()
   let lanGateway: MobileAccessGateway | undefined
   const startGateway = async (candidateConfig: PluginConfig): Promise<MobileAccessRuntime> => {
     const resolved = parseGatewayConfig(candidateConfig)
@@ -348,6 +349,7 @@ export async function apply(ctx: Context, config: PluginConfig): Promise<void> {
       mobileAccess,
       upstreamLoginUrl,
       webSocketPaths,
+      blockedUpgradePaths,
     )
     await candidate.start()
     lanGateway = candidate
@@ -407,6 +409,7 @@ export async function apply(ctx: Context, config: PluginConfig): Promise<void> {
         mobileAccess,
         upstreamLoginUrl,
         webSocketPaths,
+        blockedUpgradePaths,
       )
       await candidate.start()
       return candidate
@@ -579,6 +582,10 @@ export async function apply(ctx: Context, config: PluginConfig): Promise<void> {
         }
         if (request.method === 'GET' && target.decodedPathname === `${LOCAL_ADMIN_PREFIX}/remote/websocket-paths`) {
           sendJson(response, 200, { paths: webSocketPaths.list() }, false)
+          return
+        }
+        if (request.method === 'GET' && target.decodedPathname === `${LOCAL_ADMIN_PREFIX}/remote/websocket-paths/blocked`) {
+          sendJson(response, 200, { blocked: blockedUpgradePaths.report() }, false)
           return
         }
         if (request.method === 'POST' && target.decodedPathname === `${LOCAL_ADMIN_PREFIX}/remote/websocket-paths`) {

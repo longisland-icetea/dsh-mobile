@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  BlockedUpgradePathLog,
+  MAX_BLOCKED_UPGRADE_PATHS,
   MAX_EXTRA_WEBSOCKET_PATHS,
   normalizeWebSocketPaths,
   validateWebSocketPath,
@@ -49,5 +51,19 @@ describe('third-party WebSocket upgrade paths', () => {
     expect(await reloaded.load()).toEqual(['/sidebar/ws/terminal'])
     await writeFile(file, 'not json{{{', 'utf8')
     expect(await new WebSocketPathStore(file).load()).toEqual([])
+  })
+
+  it('counts rejected upgrade attempts newest-first within a bound', async () => {
+    const log = new BlockedUpgradePathLog()
+    expect(log.report()).toEqual([])
+    log.record('/sidebar/ws/terminal')
+    log.record('/sidebar/ws/terminal')
+    await new Promise(resolve => setTimeout(resolve, 5))
+    log.record('/other')
+    const report = log.report()
+    expect(report.find(entry => entry.path === '/sidebar/ws/terminal')?.attempts).toBe(2)
+    expect(report[0]?.path).toBe('/other')
+    for (let index = 0; index < MAX_BLOCKED_UPGRADE_PATHS + 5; index += 1) log.record(`/flood-${String(index)}`)
+    expect(log.report().length).toBeLessThanOrEqual(MAX_BLOCKED_UPGRADE_PATHS)
   })
 })
