@@ -31,6 +31,7 @@ import {
   sendJson,
 } from './http-security.js'
 import { JsonDeviceStore } from './storage.js'
+import { WebSocketPathStore } from './websocket-paths.js'
 import { FunnelController, funnelExecutable } from './funnel.js'
 import { CpolarController } from './cpolar.js'
 import { CpolarComponentManager, type CpolarComponentStatus } from './cpolar-component.js'
@@ -334,6 +335,10 @@ export async function apply(ctx: Context, config: PluginConfig): Promise<void> {
       },
     ],
   })
+  // One upgrade-path policy shared by the LAN gateway and every remote
+  // gateway: admin approvals apply immediately, no restart required.
+  const webSocketPaths = new WebSocketPathStore(join(stateDirectory, 'websocket-paths.json'))
+  await webSocketPaths.load()
   let lanGateway: MobileAccessGateway | undefined
   const startGateway = async (candidateConfig: PluginConfig): Promise<MobileAccessRuntime> => {
     const resolved = parseGatewayConfig(candidateConfig)
@@ -342,6 +347,7 @@ export async function apply(ctx: Context, config: PluginConfig): Promise<void> {
       new JsonDeviceStore(resolved.stateFile, resolved.maxDevices),
       mobileAccess,
       upstreamLoginUrl,
+      webSocketPaths,
     )
     await candidate.start()
     lanGateway = candidate
@@ -400,6 +406,7 @@ export async function apply(ctx: Context, config: PluginConfig): Promise<void> {
         new JsonDeviceStore(resolved.stateFile, resolved.maxDevices),
         mobileAccess,
         upstreamLoginUrl,
+        webSocketPaths,
       )
       await candidate.start()
       return candidate
@@ -568,6 +575,18 @@ export async function apply(ctx: Context, config: PluginConfig): Promise<void> {
             if (remoteControllers.frp.status().enabled) await remoteControllers.frp.reconnect()
           })
           sendJson(response, 200, remotePayload(), false)
+          return
+        }
+        if (request.method === 'GET' && target.decodedPathname === `${LOCAL_ADMIN_PREFIX}/remote/websocket-paths`) {
+          sendJson(response, 200, { paths: webSocketPaths.list() }, false)
+          return
+        }
+        if (request.method === 'POST' && target.decodedPathname === `${LOCAL_ADMIN_PREFIX}/remote/websocket-paths`) {
+          const body = await readJsonObject(request, 4096)
+          if (!Array.isArray(body.paths)) throw new HttpError(400, 'bad_request')
+          const paths = await webSocketPaths.replace(body.paths)
+          logger.info('websocket upgrade paths updated count=%d paths=%o', paths.length, paths)
+          sendJson(response, 200, { paths }, false)
           return
         }
         if (request.method === 'POST' && target.decodedPathname === `${LOCAL_ADMIN_PREFIX}/remote/frp/vps/host-keys`) {

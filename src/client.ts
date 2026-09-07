@@ -509,8 +509,65 @@ function installControl(): { remove: () => void; toggle: () => void; isOpen: () 
   const remoteReset = element('button', 'dsh-mobile-control__manage'); remoteReset.type = 'button'; remoteReset.textContent = t('resetRemoteLogin')
   remoteManageRow.append(remoteDevices, remoteReset)
   const remoteDevicePanel = element('div', 'dsh-mobile-control__devices'); remoteDevicePanel.hidden = true
+  const wsPathsSection = element('section', 'dsh-mobile-control__ws-paths')
+  const wsPathsTitle = element('h3', 'dsh-mobile-control__section-title'); wsPathsTitle.textContent = t('wsPathsTitle')
+  const wsPathsIntro = element('p', 'dsh-mobile-control__intro'); wsPathsIntro.textContent = t('wsPathsIntro')
+  const wsPathsList = element('ul', 'dsh-mobile-control__ws-paths-list')
+  const wsPathsRow = element('div', 'dsh-mobile-control__ws-paths-row')
+  const wsPathsInput = element('input', 'dsh-mobile-control__ws-paths-input'); wsPathsInput.type = 'text'; wsPathsInput.placeholder = t('wsPathsPlaceholder'); wsPathsInput.setAttribute('aria-label', t('wsPathsTitle'))
+  const wsPathsAdd = element('button', 'dsh-mobile-control__secondary'); wsPathsAdd.type = 'button'; wsPathsAdd.textContent = t('wsPathsAdd')
+  const wsPathsStatus = element('p', 'dsh-mobile-control__status'); wsPathsStatus.hidden = true; wsPathsStatus.setAttribute('aria-live', 'polite')
+  wsPathsRow.append(wsPathsInput, wsPathsAdd)
+  wsPathsSection.append(wsPathsTitle, wsPathsIntro, wsPathsList, wsPathsRow, wsPathsStatus)
+  let wsPathsCurrent: string[] = []
+  let wsPathsLoaded = false
+  const renderWsPaths = (paths: readonly string[]): void => {
+    wsPathsCurrent = [...paths]
+    wsPathsList.replaceChildren()
+    if (paths.length === 0) {
+      const empty = element('li', 'dsh-mobile-control__ws-paths-empty'); empty.textContent = t('wsPathsEmpty'); wsPathsList.append(empty)
+    }
+    for (const path of paths) {
+      const item = element('li', 'dsh-mobile-control__ws-paths-item')
+      const label = element('code'); label.textContent = path
+      const remove = element('button', 'dsh-mobile-control__ws-paths-remove'); remove.type = 'button'; remove.textContent = t('wsPathsRemove'); remove.setAttribute('aria-label', `${t('wsPathsRemove')}: ${path}`)
+      remove.addEventListener('click', () => { void saveWsPaths(wsPathsCurrent.filter(entry => entry !== path)) })
+      item.append(label, remove)
+      wsPathsList.append(item)
+    }
+  }
+  const loadWsPaths = (): void => {
+    void controlRequestJson('/api/mobile-access/remote/websocket-paths').then(data => {
+      wsPathsLoaded = true
+      wsPathsStatus.hidden = true
+      renderWsPaths(Array.isArray(data.paths) ? data.paths.filter((entry): entry is string => typeof entry === 'string') : [])
+    }, error => {
+      wsPathsStatus.hidden = false
+      wsPathsStatus.textContent = t('requestFailed', { error: String(error) })
+    })
+  }
+  const saveWsPaths = (paths: readonly string[]): void => {
+    wsPathsStatus.hidden = true
+    void controlRequestJson('/api/mobile-access/remote/websocket-paths', { method: 'POST', body: JSON.stringify({ paths }) }).then(data => {
+      wsPathsLoaded = true
+      renderWsPaths(Array.isArray(data.paths) ? data.paths.filter((entry): entry is string => typeof entry === 'string') : [])
+    }, error => {
+      wsPathsStatus.hidden = false
+      wsPathsStatus.textContent = t('requestFailed', { error: String(error) })
+    })
+  }
+  wsPathsAdd.addEventListener('click', () => {
+    const value = wsPathsInput.value.trim()
+    if (value === '') {
+      wsPathsStatus.hidden = false
+      wsPathsStatus.textContent = t('wsPathsInvalid')
+      return
+    }
+    wsPathsInput.value = ''
+    saveWsPaths([...wsPathsCurrent, value])
+  })
   const remoteWorkspace = element('section', 'dsh-mobile-control__remote-workspace')
-  remoteWorkspace.append(providerSetupHeader, remoteStatus, remoteAccess, remoteGuide, providerSetupBody, remoteActions, remoteQr, remoteManageRow, remoteDevicePanel)
+  remoteWorkspace.append(providerSetupHeader, remoteStatus, remoteAccess, remoteGuide, providerSetupBody, remoteActions, remoteQr, remoteManageRow, remoteDevicePanel, wsPathsSection)
   const diagnosticsView = element('div', 'dsh-mobile-control__view is-diagnostics'); diagnosticsView.hidden = true
   const diagnosticsIntro = element('p', 'dsh-mobile-control__intro'); diagnosticsIntro.textContent = t('diagnosticsIntro')
   const diagnosticsSummary = element('section', 'dsh-mobile-control__diagnostic-summary is-idle'); diagnosticsSummary.setAttribute('aria-live', 'polite')
@@ -613,7 +670,7 @@ function installControl(): { remove: () => void; toggle: () => void; isOpen: () 
     title.textContent = view === 'lan' ? t('lanAccess') : view === 'remote' ? t('remoteAccess') : t('connectionDiagnostics')
   }
   lanTab.addEventListener('click', () => { selectView('lan') })
-  remoteTab.addEventListener('click', () => { selectView('remote'); loadRemote() })
+  remoteTab.addEventListener('click', () => { selectView('remote'); loadRemote(); if (!wsPathsLoaded) loadWsPaths() })
   const setOpen = (open: boolean): void => {
     panel.hidden = !open
     for (const trigger of document.querySelectorAll('.dsh-mobile-control__trigger')) trigger.setAttribute('aria-expanded', String(open))
@@ -2530,7 +2587,7 @@ export const CONTROL_STYLES = `
 .dsh-mobile-control__actions{display:flex;flex-wrap:nowrap;gap:6px}.dsh-mobile-control__actions button{flex:1 1 0;min-width:0;min-height:40px;padding:8px 4px;border-radius:10px;font:12px/1.2 system-ui;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dsh-mobile-control__secondary{border:1px solid var(--dsw-alias-border-normal,#cfd5dd);background:transparent;color:inherit}.dsh-mobile-control__primary{border:1px solid #2563eb;background:#2563eb;color:#fff}.dsh-mobile-control__actions button:disabled{cursor:not-allowed;opacity:.45}
 .dsh-mobile-control button:focus-visible,.dsh-mobile-control a:focus-visible,.dsh-mobile-control input:focus-visible,.dsh-mobile-control summary:focus-visible{outline:3px solid rgb(37 99 235 / 28%);outline-offset:2px}
 .dsh-mobile-control__trigger{box-sizing:border-box;flex:none;display:flex;align-items:center;gap:8px;width:calc(100% + 4px);height:42px;margin:4px -2px;padding:0 10px 0 8px;border:0;border-radius:12px;background:transparent;color:var(--dsw-alias-label-primary,#16181d);font-family:inherit;font-size:14px;line-height:22px;cursor:pointer;overflow:hidden}.dsh-mobile-control__trigger:hover{background:var(--dsw-alias-interactive-bg-hover,#f1f3f6)}.dsh-mobile-control__trigger:active,.dsh-mobile-control__trigger[aria-expanded="true"]{background:var(--dsw-alias-interactive-bg-active,#e8ebf0)}.dsh-mobile-control__trigger:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,currentColor);outline-offset:2px}.dsh-mobile-control__trigger.is-rail{width:36px;height:36px;margin:8px 0 10px;padding:0;justify-content:center;gap:0;border-radius:50%}.dsh-mobile-control__trigger-icon{display:block;flex:none}.dsh-mobile-control__trigger-label{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.dsh-mobile-control__manage-row{display:flex;justify-content:space-between;gap:8px;margin-top:10px}.dsh-mobile-control__manage{flex:1 1 0;min-width:0;min-height:34px;padding:6px 8px;border:1px solid var(--dsw-alias-border-normal,#cfd5dd);border-radius:10px;background:transparent;color:inherit;font:12px/1.3 system-ui;cursor:pointer}.dsh-mobile-control__devices{margin-top:10px;border:1px solid var(--dsw-alias-border-subtle,#e1e5eb);border-radius:10px;padding:8px;max-height:220px;overflow-y:auto}.dsh-mobile-control__device-empty{color:var(--dsw-alias-label-secondary,#606873);font-size:12px;margin:0}.dsh-mobile-control__device{display:flex;align-items:center;gap:8px;padding:6px 2px}.dsh-mobile-control__device + .dsh-mobile-control__device{border-top:1px solid var(--dsw-alias-border-subtle,#e1e5eb)}.dsh-mobile-control__device-label{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.dsh-mobile-control__device-meta{flex:none;color:var(--dsw-alias-label-secondary,#606873);font-size:11px;white-space:nowrap}.dsh-mobile-control__device-revoke{flex:none;min-height:28px;padding:4px 8px;border:1px solid #dc2626;border-radius:8px;background:transparent;color:#dc2626;font:12px/1.2 system-ui;cursor:pointer}
+.dsh-mobile-control__manage-row{display:flex;justify-content:space-between;gap:8px;margin-top:10px}.dsh-mobile-control__manage{flex:1 1 0;min-width:0;min-height:34px;padding:6px 8px;border:1px solid var(--dsw-alias-border-normal,#cfd5dd);border-radius:10px;background:transparent;color:inherit;font:12px/1.3 system-ui;cursor:pointer}.dsh-mobile-control__devices{margin-top:10px;border:1px solid var(--dsw-alias-border-subtle,#e1e5eb);border-radius:10px;padding:8px;max-height:220px;overflow-y:auto}.dsh-mobile-control__device-empty{color:var(--dsw-alias-label-secondary,#606873);font-size:12px;margin:0}.dsh-mobile-control__device{display:flex;align-items:center;gap:8px;padding:6px 2px}.dsh-mobile-control__device + .dsh-mobile-control__device{border-top:1px solid var(--dsw-alias-border-subtle,#e1e5eb)}.dsh-mobile-control__device-label{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.dsh-mobile-control__device-meta{flex:none;color:var(--dsw-alias-label-secondary,#606873);font-size:11px;white-space:nowrap}.dsh-mobile-control__device-revoke{flex:none;min-height:28px;padding:4px 8px;border:1px solid #dc2626;border-radius:8px;background:transparent;color:#dc2626;font:12px/1.2 system-ui;cursor:pointer}.dsh-mobile-control__ws-paths{margin:10px 0 0;padding:12px;border:1px solid var(--dsw-alias-border-subtle,#dbe1e8);border-radius:13px;background:var(--dsw-alias-bg-layer-2,#fff)}.dsh-mobile-control__ws-paths-list{margin:0 0 8px;padding:0;list-style:none}.dsh-mobile-control__ws-paths-empty{color:var(--dsw-alias-label-secondary,#606873);font-size:12px}.dsh-mobile-control__ws-paths-item{display:flex;align-items:center;gap:8px;padding:6px 0}.dsh-mobile-control__ws-paths-item + .dsh-mobile-control__ws-paths-item{border-top:1px solid var(--dsw-alias-border-subtle,#e1e5eb)}.dsh-mobile-control__ws-paths-item code{flex:1 1 0;min-width:0;overflow:hidden;font:11px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;text-overflow:ellipsis;white-space:nowrap}.dsh-mobile-control__ws-paths-remove{flex:none;min-height:28px;padding:4px 8px;border:1px solid var(--dsw-alias-border-normal,#cfd5dd);border-radius:8px;background:transparent;color:inherit;font:12px/1.2 system-ui;cursor:pointer}.dsh-mobile-control__ws-paths-row{display:flex;gap:8px}.dsh-mobile-control__ws-paths-row input{flex:1 1 0;min-width:0;box-sizing:border-box;min-height:40px;padding:8px 10px;border:1px solid var(--dsw-alias-border-normal,#cfd5dd);border-radius:10px;background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#16181d);font:14px/1.4 system-ui}.dsh-mobile-control__ws-paths-row button{flex:none}
 @media (max-width:359px){.dsh-mobile-control__provider-choices{grid-template-columns:1fr}.dsh-mobile-control__provider{min-height:68px}}@media (prefers-reduced-motion:reduce){.dsh-mobile-control__provider,.dsh-mobile-control__cpolar-connect{transition:none}.dsh-mobile-control__diagnostic-summary.is-running .dsh-mobile-control__diagnostic-summary-icon::before,.dsh-mobile-control__diagnostic-checks{animation:none}}
 `
 

@@ -77,6 +77,13 @@ export {
 } from './storage.js'
 export type { DeviceSnapshot, DeviceStore, StoredDevice } from './storage.js'
 export { FRP_COMPONENT_RELEASES, FrpComponentManager } from './frp-component.js'
+export {
+  MAX_EXTRA_WEBSOCKET_PATHS,
+  MAX_WEBSOCKET_PATH_LENGTH,
+  normalizeWebSocketPaths,
+  validateWebSocketPath,
+  WebSocketPathStore,
+} from './websocket-paths.js'
 export type { FrpComponentStatus } from './frp-component.js'
 export {
   DEFAULT_VHOST_HTTP_PORT,

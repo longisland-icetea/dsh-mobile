@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   apply,
@@ -127,6 +128,16 @@ describe('mobile-control localization', () => {
     expect(template).toContain('reverse_proxy 127.0.0.1:7080')
     expect(() => createFrpServerTemplateForClipboard(7000, 'short', 'https://dsh.example.com')).toThrow()
     expect(() => createFrpServerTemplateForClipboard(7000, '0'.repeat(32), 'http://dsh.example.com')).toThrow()
+  })
+
+  it('manages admin-approved third-party WebSocket paths from the loopback panel', () => {
+    const source = readFileSync(new URL('../src/client.ts', import.meta.url), 'utf8')
+    expect(source).toContain('/api/mobile-access/remote/websocket-paths')
+    expect(source).toContain("t('wsPathsTitle')")
+    expect(source).toContain("t('wsPathsInvalid')")
+    const routes = readFileSync(new URL('../src/plugin.ts', import.meta.url), 'utf8')
+    expect(routes).toContain('/remote/websocket-paths')
+    expect(MOBILE_CONTROL_MESSAGES.en.wsPathsAdd).toBe('Allow path')
   })
 
   it('remounts plugin-owned UI only when the DSH document language changes', () => {
