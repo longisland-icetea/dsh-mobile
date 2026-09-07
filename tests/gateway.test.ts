@@ -346,6 +346,7 @@ async function gateway(
   overrides: Record<string, unknown> = {},
   testSessionTtlMs?: number,
   upstreamAuthenticatedUrl?: string,
+  extraWebSocketPaths: readonly string[] = [],
 ): Promise<MobileAccessGateway> {
   const resolved = parseGatewayConfig({
     listenHost: '127.0.0.1',
@@ -358,7 +359,8 @@ async function gateway(
     ...overrides,
   })
   const effective = testSessionTtlMs === undefined ? resolved : Object.freeze({ ...resolved, sessionTtlMs: testSessionTtlMs })
-  const instance = new MobileAccessGateway(effective, new MemoryDeviceStore(), undefined, upstreamAuthenticatedUrl)
+  const extra = new Set(extraWebSocketPaths)
+  const instance = new MobileAccessGateway(effective, new MemoryDeviceStore(), undefined, upstreamAuthenticatedUrl, { has: (pathname: string) => extra.has(pathname) })
   await instance.start()
   cleanups.push(() => instance.close())
   return instance
@@ -1310,7 +1312,7 @@ describe('WebSocket gateway', () => {
     expect(response.status).toBe(200)
   })
 
-  it('allows only the known DSH event and Remote paths, forwards only the Session Cookie, and closes all on revocation', async () => {
+  it('allows the known DSH event and Remote paths, forwards only the Session Cookie, and closes all on revocation', async () => {
     const inner = await upstream()
     const instance = await gateway(inner.port, { maxWebSockets: 3 })
     const paired = await pair(instance)
@@ -1338,11 +1340,36 @@ describe('WebSocket gateway', () => {
     unknown.socket.destroy()
   })
 
+  it('proxies an admin-approved third-party path with its query string', async () => {
+    const inner = await upstream()
+    const instance = await gateway(inner.port, {}, undefined, undefined, ['/sidebar/ws/terminal'])
+    const paired = await pair(instance)
+    const opened = await openWebSocket(instance, '/sidebar/ws/terminal?sessionId=s1&tab=t1', paired.session)
+    expect(opened.response).toContain('101 Switching Protocols')
+    opened.socket.destroy()
+    const core = await openWebSocket(instance, '/api/events.mux?generation=2', paired.session)
+    expect(core.response).toContain('101 Switching Protocols')
+    core.socket.destroy()
+  })
+
+  it('still rejects unlisted paths and their query strings', async () => {
+    const inner = await upstream()
+    const instance = await gateway(inner.port, {}, undefined, undefined, ['/sidebar/ws/terminal'])
+    const paired = await pair(instance)
+    const unknown = await openWebSocket(instance, '/api/events.unknown', paired.session)
+    expect(unknown.response).toContain('404')
+    unknown.socket.destroy()
+    const unlistedQuery = await openWebSocket(instance, '/sidebar/ws/other?sessionId=s1', paired.session)
+    expect(unlistedQuery.response).toContain('404')
+    unlistedQuery.socket.destroy()
+    expect(inner.upgradeObservations).toHaveLength(0)
+  })
+
   it('rejects a wrong WebSocket Origin on every allowed path before opening upstream work', async () => {
     const inner = await upstream()
-    const instance = await gateway(inner.port)
+    const instance = await gateway(inner.port, {}, undefined, undefined, ['/sidebar/ws/terminal'])
     const paired = await pair(instance)
-    for (const path of ['/api/events.mux', '/api/events.host', '/api/remote.mux']) {
+    for (const path of ['/api/events.mux', '/api/events.host', '/api/remote.mux', '/sidebar/ws/terminal?sessionId=s1']) {
       const rejected = await openWebSocket(instance, path, paired.session, 'http://attacker.example')
       expect(rejected.response).toContain('403')
       rejected.socket.destroy()

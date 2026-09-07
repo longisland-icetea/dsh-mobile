@@ -807,6 +807,7 @@ export class MobileAccessGateway {
     store: DeviceStore,
     private readonly extensions?: MobileAccessService,
     private readonly upstreamAuthenticatedUrl?: string,
+    private readonly extraWebSocketPaths?: { has(pathname: string): boolean },
   ) {
     this.listenerTlsEnabled = config.tls.mode === 'provided'
     this.tlsEnabled = config.publicTls
@@ -2063,7 +2064,13 @@ export class MobileAccessGateway {
     // still requires it to be same-origin.
     assertExternalTrust(request, policy, false)
     if (!policy.acceptsOrigin(request.headers.origin)) throw new HttpError(403, 'forbidden')
-    if (target.search !== '' || !WS_PATHS.has(target.decodedPathname)) throw new HttpError(404, 'not_found')
+    // Core DSH paths plus admin-approved third-party plugin paths (exact
+    // pathname match; the query string rides along to the upstream plugin,
+    // which owns its parsing). Everything else stays 404: paired-device
+    // auth, Origin, and handshake checks below still apply to allowed paths.
+    const upgradeAllowed = WS_PATHS.has(target.decodedPathname)
+      || (this.extraWebSocketPaths?.has(target.decodedPathname) ?? false)
+    if (!upgradeAllowed) throw new HttpError(404, 'not_found')
     if (request.method !== 'GET' || headerValue(request.headers, 'upgrade')?.toLowerCase() !== 'websocket'
       || !hasToken(headerValue(request.headers, 'connection'), 'upgrade')) {
       throw new HttpError(400, 'bad_request')
