@@ -3,6 +3,10 @@
 Notable changes to DSH Mobile are recorded here. GitHub Releases remain the source for downloadable packages and complete generated commit notes.
 
 
+## 0.3.12 - 2026-09-07
+
+- Document remote notification limits: browser permission is per origin, OS toasts stay on the computer, and server-side channels (e.g. dsh-messager webhooks) are the reliable push path to the phone (thanks @idoall for reporting #46). No code change since 0.3.11.
+
 ## 0.3.11 - 2026-09-07
 
 - Sync the browser tab title with the current session on the dedicated layout, matching the stock behavior (thanks @idoall for reporting #45).
