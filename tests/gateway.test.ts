@@ -10,6 +10,7 @@ import { gunzipSync } from 'node:zlib'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parseGatewayConfig } from '../src/config.js'
 import { MobileAccessGateway } from '../src/gateway.js'
+import { BlockedUpgradePathLog } from '../src/websocket-paths.js'
 import { CSRF_HEADER, DEVICE_COOKIE, SESSION_COOKIE } from '../src/http-security.js'
 import { MemoryDeviceStore } from '../src/storage.js'
 import { DSH_MOBILE_VERSION, MINIMUM_ANDROID_APP_VERSION } from '../src/version.js'
@@ -347,6 +348,7 @@ async function gateway(
   testSessionTtlMs?: number,
   upstreamAuthenticatedUrl?: string,
   extraWebSocketPaths: readonly string[] = [],
+  blockedUpgradeLog?: BlockedUpgradePathLog,
 ): Promise<MobileAccessGateway> {
   const resolved = parseGatewayConfig({
     listenHost: '127.0.0.1',
@@ -360,7 +362,7 @@ async function gateway(
   })
   const effective = testSessionTtlMs === undefined ? resolved : Object.freeze({ ...resolved, sessionTtlMs: testSessionTtlMs })
   const extra = new Set(extraWebSocketPaths)
-  const instance = new MobileAccessGateway(effective, new MemoryDeviceStore(), undefined, upstreamAuthenticatedUrl, { has: (pathname: string) => extra.has(pathname) })
+  const instance = new MobileAccessGateway(effective, new MemoryDeviceStore(), undefined, upstreamAuthenticatedUrl, { has: (pathname: string) => extra.has(pathname) }, blockedUpgradeLog)
   await instance.start()
   cleanups.push(() => instance.close())
   return instance
@@ -1350,6 +1352,17 @@ describe('WebSocket gateway', () => {
     const core = await openWebSocket(instance, '/api/events.mux?generation=2', paired.session)
     expect(core.response).toContain('101 Switching Protocols')
     core.socket.destroy()
+  })
+
+  it('records rejected upgrade paths for one-click approval', async () => {
+    const inner = await upstream()
+    const log = new BlockedUpgradePathLog()
+    const instance = await gateway(inner.port, {}, undefined, undefined, [], log)
+    const paired = await pair(instance)
+    const blocked = await openWebSocket(instance, '/sidebar/ws/terminal?sessionId=s1', paired.session)
+    expect(blocked.response).toContain('404')
+    blocked.socket.destroy()
+    expect(instance.blockedUpgradePathReport()).toMatchObject([{ path: '/sidebar/ws/terminal', attempts: 1 }])
   })
 
   it('still rejects unlisted paths and their query strings', async () => {

@@ -133,11 +133,16 @@ describe('mobile-control localization', () => {
   it('manages admin-approved third-party WebSocket paths from the loopback panel', () => {
     const source = readFileSync(new URL('../src/client.ts', import.meta.url), 'utf8')
     expect(source).toContain('/api/mobile-access/remote/websocket-paths')
+    expect(source).toContain('/api/mobile-access/remote/websocket-paths/blocked')
     expect(source).toContain("t('wsPathsTitle')")
     expect(source).toContain("t('wsPathsInvalid')")
+    expect(source).toContain("t('wsPathsDetected')")
+    expect(source).toContain("t('wsPathsAllow')")
     const routes = readFileSync(new URL('../src/plugin.ts', import.meta.url), 'utf8')
     expect(routes).toContain('/remote/websocket-paths')
     expect(MOBILE_CONTROL_MESSAGES.en.wsPathsAdd).toBe('Allow path')
+    expect(source).toContain('diagnosticsChecks, wsPathsSection, diagnosticsDetails')
+    expect(source).toContain("if (view === 'diagnostics' && !wsPathsLoaded) loadWsPaths()")
   })
 
   it('remounts plugin-owned UI only when the DSH document language changes', () => {
