@@ -26,14 +26,14 @@
 
 > DSH Mobile 是 DeepSeek Harness 社区插件，原生 App 仅支持 Android。
 >
-> **0.3.10 更新**：感谢 @idoall 反馈，大屏（≥900px）会话侧边栏不再自动收起，常驻显示直到手动关闭；同时声明插件市场展示截图。[详细记录](CHANGELOG.md)。
+> **0.3.11 更新**：远程页浏览器标签页跟随当前会话标题（#45）；第三方插件 WebSocket 可经管理员批准放行（如终端，#47）。感谢 @idoall 反馈。[详细记录](CHANGELOG.md)。
 >
-> **升级提醒**：Windows DSH Desktop 用户请更新至插件 0.3.10；现有 0.3.3-0.3.9 App 可继续使用，无需重新配对。[兼容说明](#兼容性)。
+> **升级提醒**：Windows DSH Desktop 用户请更新至插件 0.3.11；现有 0.3.3-0.3.10 App 可继续使用，无需重新配对。[兼容说明](#兼容性)。
 
 <p align="center">
-  <a href="https://github.com/saya-ch/dsh-mobile/releases/download/v0.3.10/dsh-mobile-android-v0.3.10.apk"><img src="assets/brand/app-icon-rounded.svg" alt="DSH Mobile 安卓应用图标" width="72" height="72"></a><br>
-  <a href="https://github.com/saya-ch/dsh-mobile/releases/download/v0.3.10/dsh-mobile-android-v0.3.10.apk"><strong>下载 Android App 0.3.10</strong></a><br>
-  <sub><a href="https://github.com/saya-ch/dsh-mobile/releases/tag/v0.3.10">版本说明与校验文件</a></sub>
+  <a href="https://github.com/saya-ch/dsh-mobile/releases/download/v0.3.11/dsh-mobile-android-v0.3.11.apk"><img src="assets/brand/app-icon-rounded.svg" alt="DSH Mobile 安卓应用图标" width="72" height="72"></a><br>
+  <a href="https://github.com/saya-ch/dsh-mobile/releases/download/v0.3.11/dsh-mobile-android-v0.3.11.apk"><strong>下载 Android App 0.3.11</strong></a><br>
+  <sub><a href="https://github.com/saya-ch/dsh-mobile/releases/tag/v0.3.11">版本说明与校验文件</a></sub>
 </p>
 
 DSH Mobile 是一个 DeepSeek Harness 插件，让手机浏览器或 Android App 通过局域网，或可选的 Tailscale Funnel、cpolar、自建 FRP 远程通道连接电脑，继续使用同一份会话、工作区、消息和工具。局域网与远程访问分别启停、分别管理设备，且都不修改 DeepSeek Harness 源码。
@@ -207,14 +207,14 @@ flowchart LR
 
 | DSH Mobile 插件 | 验证支持的 DeepSeek Harness 版本 |
 | --- | --- |
-| `0.3.10` | `0.1.3-alpha.1` |
+| `0.3.10`、`0.3.11` | `0.1.3-alpha.1` |
 | `0.3.9` | `0.1.3-alpha.1` |
 | `0.3.6`-`0.3.8` | `0.1.2-rc.1` |
 | `0.3.4`、`0.3.5` | `0.1.2-alpha.2` |
 | `0.3.0`-`0.3.3` | `0.1.2-alpha.1` |
 | `0.1.4`、`0.2.x` | `0.1.1-rc.2` |
 
-现有 0.3.3-0.3.9 App 无需重新配对；更早的 App 使用不同的状态栏策略，建议同步升级；App 0.1.3 及更早版本需卸载重装并重新配对。
+现有 0.3.3-0.3.10 App 无需重新配对；更早的 App 使用不同的状态栏策略，建议同步升级；App 0.1.3 及更早版本需卸载重装并重新配对。
 
 ## 卸载
 
