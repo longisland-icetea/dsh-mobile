@@ -7,7 +7,7 @@ export type { MobileLayoutLanguage } from './mobile-layout-messages.js'
 
 interface SessionState {
   readonly current?: string
-  readonly byId: Readonly<Record<string, { readonly blank?: boolean } | undefined>>
+  readonly byId: Readonly<Record<string, { readonly blank?: boolean; readonly title?: string } | undefined>>
 }
 
 interface MobileRootProps {
@@ -217,6 +217,17 @@ function MobileAppFrame(props: MobileRootProps & { readonly controller: MobileLa
   useEffect(() => {
     if (!hasSession) props.controller.closeDetails()
   }, [hasSession, props.controller])
+
+  // Mirror the stock layout: project the current session title into the
+  // browser tab, restoring the product title when no session is selected.
+  const sessionTitle = props.useSessions(session =>
+    session.current === undefined ? undefined : session.byId[session.current]?.title,
+  )
+  useEffect(() => {
+    const productTitle = document.title
+    if (sessionTitle !== undefined) document.title = `${sessionTitle} — ${productTitle}`
+    return () => { document.title = productTitle }
+  }, [sessionTitle])
 
   useEffect(() => {
     const suppressAutofocus = (event: FocusEvent): void => {

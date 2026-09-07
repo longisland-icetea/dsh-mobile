@@ -334,6 +334,13 @@ describe('dedicated mobile layout boot', () => {
     expect(source).toContain('state.detailsOpen || (state.sidebarOpen && !wideViewport)')
   })
 
+  it('projects the current session title into the browser tab like the stock layout', () => {
+    const source = readFileSync(new URL('../src/mobile-layout.ts', import.meta.url), 'utf8')
+    expect(source).toContain('session.byId[session.current]?.title')
+    expect(source).toContain('document.title = `${sessionTitle} — ${productTitle}`')
+    expect(source).toContain('return () => { document.title = productTitle }')
+  })
+
   it('opens the command menu without restoring focus to the mobile editor', () => {
     const source = readFileSync(new URL('../src/mobile-layout.ts', import.meta.url), 'utf8')
     expect(source).toContain("event.target.closest('button[aria-haspopup=\"listbox\"]')")
