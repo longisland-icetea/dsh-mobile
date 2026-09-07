@@ -142,8 +142,14 @@ describe('mobile-control localization', () => {
     expect(routes).toContain('/remote/websocket-paths')
     expect(MOBILE_CONTROL_MESSAGES.en.wsPathsAdd).toBe('Allow path')
     expect(source).toContain("frpVpsSummary.textContent = t('frpStep2Title')")
+    expect(source).toContain('wsGroupOf')
+    expect(source).toContain('wsPathsAllowAll')
+    expect(source).toContain('dsh-mobile-control__ws-dot')
+    expect(source).toContain('setInterval(pollWsBlocked, 20_000)')
+    expect(MOBILE_CONTROL_MESSAGES.en.wsPathsAllowAll).toBe('Allow all')
     expect(source).toContain('diagnosticsChecks, wsPathsSection, diagnosticsDetails')
-    expect(source).toContain("if (view === 'diagnostics' && !wsPathsLoaded) loadWsPaths()")
+    expect(source).toContain("if (view === 'diagnostics') {")
+    expect(source).toContain('wsPathsSeenAttempts = wsBlockedTotal(wsPathsBlocked)')
   })
 
   it('remounts plugin-owned UI only when the DSH document language changes', () => {
