@@ -3,7 +3,7 @@ import { runInNewContext } from 'node:vm'
 import { describe, expect, it, vi } from 'vitest'
 import { rewriteMobileIndex } from '../src/gateway.js'
 import { CSRF_COOKIE, CSRF_HEADER } from '../src/http-security.js'
-import { MOBILE_LAYOUT_MESSAGES, MOBILE_LAYOUT_STYLES, resolveMobileLayoutLanguage } from '../src/mobile-layout.js'
+import { MOBILE_LAYOUT_MESSAGES, MOBILE_LAYOUT_STYLES, WIDE_LAYOUT_MIN_WIDTH_PX, isWideViewportLayout, resolveMobileLayoutLanguage } from '../src/mobile-layout.js'
 
 function index(entries: unknown[]): string {
   return `<!doctype html><html><head><script>window.__DSH_BOOT__ = ${JSON.stringify({ rev: 'stock', entries })};</script></head><body></body></html>`
@@ -308,6 +308,30 @@ describe('dedicated mobile layout boot', () => {
     expect(MOBILE_LAYOUT_STYLES).toContain('max-height:min(42dvh,360px)')
     expect(MOBILE_LAYOUT_STYLES).toContain('height:auto!important')
     expect(MOBILE_LAYOUT_STYLES).toContain('min-height:44px')
+  })
+
+  it('treats viewports at least 900px wide as a persistent desktop sidebar', () => {
+    expect(WIDE_LAYOUT_MIN_WIDTH_PX).toBe(900)
+    expect(isWideViewportLayout(899)).toBe(false)
+    expect(isWideViewportLayout(900)).toBe(true)
+    expect(isWideViewportLayout(1920)).toBe(true)
+  })
+
+  it('keeps the narrow overlay drawer CSS untouched while docking the wide sidebar', () => {
+    expect(MOBILE_LAYOUT_STYLES).toContain('.dshm-drawer{position:fixed')
+    expect(MOBILE_LAYOUT_STYLES).toContain('@media(min-width:900px)')
+    expect(MOBILE_LAYOUT_STYLES).toContain('.dshm-shell{grid-template-columns:auto minmax(0,1fr)}')
+    expect(MOBILE_LAYOUT_STYLES).toContain('.dshm-main{grid-area:1/2}')
+    expect(MOBILE_LAYOUT_STYLES).toContain('.dshm-drawer{position:static')
+    expect(MOBILE_LAYOUT_STYLES).toContain('.dshm-drawer[data-open=true]{width:340px')
+  })
+
+  it('opens the wide sidebar by default without resetting explicit toggles', () => {
+    const source = readFileSync(new URL('../src/mobile-layout.ts', import.meta.url), 'utf8')
+    expect(source).toContain('sidebarOpen: viewportIsWide()')
+    expect(source).toContain('sharedController ??= new MobileLayoutController()')
+    expect(source).toContain('if (viewportIsWide()) return')
+    expect(source).toContain('state.detailsOpen || (state.sidebarOpen && !wideViewport)')
   })
 
   it('opens the command menu without restoring focus to the mobile editor', () => {

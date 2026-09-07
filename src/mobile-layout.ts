@@ -37,6 +37,23 @@ interface LayoutSnapshot {
   readonly detailsOpen: boolean
 }
 
+/**
+ * Viewport width at which the dedicated layout treats the sidebar as a
+ * persistent desktop panel instead of an overlay drawer. Narrow screens
+ * keep the overlay behavior byte-for-byte.
+ */
+export const WIDE_LAYOUT_MIN_WIDTH_PX = 900
+
+export function isWideViewportLayout(viewportWidth: number): boolean {
+  return viewportWidth >= WIDE_LAYOUT_MIN_WIDTH_PX
+}
+
+/** Reads the live viewport; unknown environments (SSR, tests) stay narrow. */
+function viewportIsWide(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
+  return window.matchMedia(`(min-width: ${WIDE_LAYOUT_MIN_WIDTH_PX}px)`).matches
+}
+
 /** Resolve the supported language used by the dedicated mobile layout. */
 export function resolveMobileLayoutLanguage(
   documentLanguage: string,
@@ -48,7 +65,10 @@ export function resolveMobileLayoutLanguage(
 }
 
 class MobileLayoutController {
-  private snapshot: LayoutSnapshot = Object.freeze({ sidebarOpen: false, detailsOpen: false })
+  // Wide viewports start with the persistent sidebar open; applying the
+  // layout again (reconnect, refocus) reuses the module singleton below,
+  // so an explicit user collapse is never reset.
+  private snapshot: LayoutSnapshot = Object.freeze({ sidebarOpen: viewportIsWide(), detailsOpen: false })
   private readonly listeners = new Set<() => void>()
 
   readonly subscribe = (listener: () => void): (() => void) => {
@@ -155,12 +175,20 @@ html,body,#root{width:100%;height:100%;overflow:hidden}
 .dshm-shell [data-plan-review-key]>section>div:last-child>div:last-child>button:first-child{grid-column:1/-1}
 .dshm-shell [data-plan-review-key]>section>div:last-child button{width:100%;min-height:44px}
 }
+@media(min-width:900px){
+.dshm-shell{grid-template-columns:auto minmax(0,1fr)}
+.dshm-main{grid-area:1/2}
+.dshm-drawer{position:static;grid-area:1/1;box-shadow:none}
+.dshm-drawer[data-open=true]{width:340px;box-shadow:none}
+.dshm-drawer[data-open=false]{width:56px}
+}
 @media(prefers-reduced-motion:reduce){.dshm-drawer,.dshm-details,.dshm-scrim,.dshm-drawer>*{transition:none!important}}
 `
 
 function MobileAppFrame(props: MobileRootProps & { readonly controller: MobileLayoutController }): ReactNode {
   const state = useSyncExternalStore(props.controller.subscribe, props.controller.getSnapshot)
   const suppressKeyboardUntil = useRef(0)
+  const [wideViewport, setWideViewport] = useState(viewportIsWide)
   const [documentLanguage, setDocumentLanguage] = useState(document.documentElement.lang)
   const browserLanguages = navigator.languages.length > 0 ? navigator.languages : [navigator.language]
   const language = resolveMobileLayoutLanguage(documentLanguage, browserLanguages)
@@ -170,6 +198,15 @@ function MobileAppFrame(props: MobileRootProps & { readonly controller: MobileLa
     return current !== undefined && session.byId[current]?.blank === false ? current : undefined
   })
   const hasSession = activeSessionId !== undefined
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+    const query = window.matchMedia(`(min-width: ${WIDE_LAYOUT_MIN_WIDTH_PX}px)`)
+    const syncViewport = (): void => { setWideViewport(query.matches) }
+    syncViewport()
+    query.addEventListener('change', syncViewport)
+    return () => { query.removeEventListener('change', syncViewport) }
+  }, [])
 
   useEffect(() => {
     const observer = new MutationObserver(() => { setDocumentLanguage(document.documentElement.lang) })
@@ -221,7 +258,10 @@ function MobileAppFrame(props: MobileRootProps & { readonly controller: MobileLa
     }
   }, [])
 
+  // A persistent wide sidebar stays put: selecting a session only dismisses
+  // the narrow overlay drawer (and its soft-keyboard suppression).
   const closeDrawerAfterSessionAction = (event: { readonly target: EventTarget | null }): void => {
+    if (viewportIsWide()) return
     if (!(event.target instanceof Element)) return
     const row = event.target.closest<HTMLElement>('[role="treeitem"][aria-selected]')
     const action = event.target.closest('button,[role="button"]')
@@ -243,7 +283,9 @@ function MobileAppFrame(props: MobileRootProps & { readonly controller: MobileLa
     createElement('button', {
       'aria-label': messages.closePanels,
       className: 'dshm-scrim',
-      'data-open': state.sidebarOpen || state.detailsOpen,
+      // A persistent wide sidebar needs no dimming; the scrim only covers
+      // the narrow overlay drawer and the details panel.
+      'data-open': state.detailsOpen || (state.sidebarOpen && !wideViewport),
       onClick: () => { state.detailsOpen ? props.controller.closeDetails() : props.controller.closeSidebar() },
       tabIndex: state.sidebarOpen || state.detailsOpen ? 0 : -1,
       type: 'button',
@@ -267,9 +309,14 @@ function MobileAppFrame(props: MobileRootProps & { readonly controller: MobileLa
   )
 }
 
+// One controller per document: re-applying the layout (reconnect, tab
+// refocus) must not reset the user's explicit sidebar toggle.
+let sharedController: MobileLayoutController | undefined
+
 /** Replace the desktop layout module on the authenticated mobile surface. */
 export function apply(ctx: MobileClientContext): void {
-  const controller = new MobileLayoutController()
+  sharedController ??= new MobileLayoutController()
+  const controller = sharedController
   ctx.effect(() => {
     const style = document.createElement('style')
     style.dataset.plugin = 'dsh-mobile-layout'
