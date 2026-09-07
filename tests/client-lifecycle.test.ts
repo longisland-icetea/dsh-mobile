@@ -141,6 +141,7 @@ describe('mobile-control localization', () => {
     const routes = readFileSync(new URL('../src/plugin.ts', import.meta.url), 'utf8')
     expect(routes).toContain('/remote/websocket-paths')
     expect(MOBILE_CONTROL_MESSAGES.en.wsPathsAdd).toBe('Allow path')
+    expect(source).toContain("frpVpsSummary.textContent = t('frpStep2Title')")
     expect(source).toContain('diagnosticsChecks, wsPathsSection, diagnosticsDetails')
     expect(source).toContain("if (view === 'diagnostics' && !wsPathsLoaded) loadWsPaths()")
   })
