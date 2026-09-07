@@ -3,9 +3,11 @@
 Notable changes to DSH Mobile are recorded here. GitHub Releases remain the source for downloadable packages and complete generated commit notes.
 
 
-## Unreleased
+## 0.3.10 - 2026-09-07
 
-- Keep the workspace sidebar open on desktop-sized viewports (≥900px): the dedicated layout docks it as a persistent panel that survives reconnects and no longer auto-closes after selecting a session, and the dimming scrim only covers the narrow overlay drawer and details panel. Narrow screens keep the overlay drawer behavior unchanged.
+- Keep the workspace sidebar open on desktop-sized viewports (≥900px): the dedicated layout docks it as a persistent panel that survives reconnects and no longer auto-closes after selecting a session, and the dimming scrim only covers the narrow overlay drawer and details panel. Narrow screens keep the overlay drawer behavior unchanged (thanks @idoall for reporting #42).
+- Declare storefront screenshots (`screenshots.json`) so plugin markets show a curated order: repository hero, LAN pairing, remote access, and two mobile UI shots.
+- Verify the mobile frontend, connection, and trust contracts against DeepSeek Harness 0.1.3-alpha.1 through the existing upstream-source CI gate; no compatibility code change was required.
 
 ## 0.3.9 - 2026-09-04
 
