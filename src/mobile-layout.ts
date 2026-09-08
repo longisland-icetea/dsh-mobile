@@ -315,13 +315,21 @@ function MobileAppFrame(props: MobileRootProps & { readonly controller: MobileLa
       className: 'dshm-details',
       'data-open': state.detailsOpen,
       ...(state.detailsOpen ? {} : { inert: '' }),
-    }, hasSession ? props.renderSlot('rightbar', {
-      width: Math.min(window.innerWidth * 0.94, 460),
-      viewportWidth: window.innerWidth,
-      // Right track needs ~300px next to a ~400px center; below that the
-      // column cannot show and narrow phones see the drawer overlay instead.
-      canShow: window.innerWidth >= 720,
-    }) : undefined),
+    }, hasSession ? [
+      // Dual right-seat rendering across harness generations: 0.1.3-alpha.2
+      // and earlier expose the `details` seat (empty owner share); the master
+      // layout line renamed it `rightbar` with resolved column geometry.
+      // Each host mounts content for exactly one of the two names, so the
+      // other slot renders empty without error.
+      props.renderSlot('details', {}),
+      props.renderSlot('rightbar', {
+        width: Math.min(window.innerWidth * 0.94, 460),
+        viewportWidth: window.innerWidth,
+        // Right track needs ~300px next to a ~400px center; below that the
+        // column cannot show and narrow phones see the drawer overlay instead.
+        canShow: window.innerWidth >= 720,
+      }),
+    ] : undefined),
     createElement('div', { className: 'dshm-overlay', 'data-shell-overlay': true }, props.renderSlot('shell.overlay', {})),
   )
 }
@@ -346,6 +354,7 @@ export function apply(ctx: MobileClientContext): void {
         sidebar: { kind: 'single', scope: 'root' },
         conversation: { kind: 'single', scope: 'session-maybe' },
         rightbar: { kind: 'single', scope: 'session' },
+        details: { kind: 'single', scope: 'session' },
         'shell.overlay': { kind: 'list', scope: 'root' },
       },
     }, props => createElement(MobileAppFrame, { ...props, controller }))

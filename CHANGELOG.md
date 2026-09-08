@@ -3,6 +3,10 @@
 Notable changes to DSH Mobile are recorded here. GitHub Releases remain the source for downloadable packages and complete generated commit notes.
 
 
+## 0.3.14 - 2026-09-08
+
+- Fixed a regression in 0.3.13: its layout adaptation tracked the harness master branch (which renamed the right details seat to `rightbar`), but the published 0.1.3-alpha.2 host still exposes `details` — so on real hosts the mobile right panel rendered empty. The layout now registers and renders both seat names (`details` with the legacy empty owner share, `rightbar` with resolved column geometry), so the right panel works on 0.1.3-alpha.1, the published 0.1.3-alpha.2, and the master contract alike. The compatibility check still asserts the master (`rightbar`) contract.
+
 ## 0.3.13 - 2026-09-08
 
 - Third-party WebSocket approval is interception-driven and generic: whenever a plugin's WebSocket connection is blocked, the diagnostics view groups the rejected paths by directory with attempt counts and offers per-path or allow-all approval, behind the same local-admin trust as pairing, and both the sidebar entry and the in-panel diagnostics button carry a red badge until reviewed. Manual path entry is tucked under an “advanced” disclosure that most users never need to open (thanks @idoall for reporting #47). Badge changes are announced to screen readers and the disclosure has a visible focus ring.
