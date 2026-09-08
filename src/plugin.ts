@@ -32,6 +32,7 @@ import {
 } from './http-security.js'
 import { JsonDeviceStore } from './storage.js'
 import { BlockedUpgradePathLog, WebSocketPathStore } from './websocket-paths.js'
+import { NotifyEventLog, subscribeNotifyEvents } from './notify-events.js'
 import { FunnelController, funnelExecutable } from './funnel.js'
 import { CpolarController } from './cpolar.js'
 import { CpolarComponentManager, type CpolarComponentStatus } from './cpolar-component.js'
@@ -340,6 +341,9 @@ export async function apply(ctx: Context, config: PluginConfig): Promise<void> {
   const webSocketPaths = new WebSocketPathStore(join(stateDirectory, 'websocket-paths.json'))
   await webSocketPaths.load()
   const blockedUpgradePaths = new BlockedUpgradePathLog()
+  const notifyEvents = new NotifyEventLog()
+  const disposeNotifyEvents = subscribeNotifyEvents(ctx, notifyEvents)
+  ctx.effect(() => disposeNotifyEvents)
   let lanGateway: MobileAccessGateway | undefined
   const startGateway = async (candidateConfig: PluginConfig): Promise<MobileAccessRuntime> => {
     const resolved = parseGatewayConfig(candidateConfig)
@@ -350,6 +354,7 @@ export async function apply(ctx: Context, config: PluginConfig): Promise<void> {
       upstreamLoginUrl,
       webSocketPaths,
       blockedUpgradePaths,
+      notifyEvents,
     )
     await candidate.start()
     lanGateway = candidate

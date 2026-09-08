@@ -294,6 +294,10 @@ describe('dedicated mobile layout boot', () => {
     expect(MOBILE_LAYOUT_MESSAGES.it).toEqual({
       closePanels: 'Chiudi pannelli',
       workspaceNavigation: 'Navigazione area di lavoro e sessioni',
+      notifyDone: 'Attività completata',
+      notifyFailed: 'Attività non riuscita',
+      notifyApproval: 'Input richiesto',
+      notifyUntitledSession: 'Sessione senza titolo',
     })
     expect(MOBILE_LAYOUT_MESSAGES.en.closePanels).toBe('Close panels')
     expect(MOBILE_LAYOUT_MESSAGES.zh.workspaceNavigation).toBe('工作区与会话导航')

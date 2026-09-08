@@ -50,6 +50,7 @@ import {
   WS_PATHS,
 } from './http-security.js'
 import type { BlockedUpgradePathEntry, BlockedUpgradePathLog } from './websocket-paths.js'
+import type { NotifyEventLog } from './notify-events.js'
 import {
   DSH_MOBILE_VERSION,
   MINIMUM_ANDROID_APP_VERSION,
@@ -810,6 +811,7 @@ export class MobileAccessGateway {
     private readonly upstreamAuthenticatedUrl?: string,
     private readonly extraWebSocketPaths?: { has(pathname: string): boolean },
     private readonly blockedUpgradeLog?: BlockedUpgradePathLog,
+    private readonly notifyEvents?: NotifyEventLog,
   ) {
     this.listenerTlsEnabled = config.tls.mode === 'provided'
     this.tlsEnabled = config.publicTls
@@ -1253,6 +1255,7 @@ export class MobileAccessGateway {
       : undefined
     if (customAsset === undefined && requestedMobileBootBatch === undefined && !computerImages && !computerImage
       && extensionTarget(target.decodedPathname) === undefined
+      && target.decodedPathname !== `${AUTH_PREFIX}/notify/pending`
       && (target.decodedPathname === AUTH_PREFIX || target.decodedPathname.startsWith(`${AUTH_PREFIX}/`))) {
       throw new HttpError(404, 'not_found')
     }
@@ -1285,6 +1288,13 @@ export class MobileAccessGateway {
       throw error
     }
     if (isMutation) this.requireCsrf(request, authorization)
+    if (request.method === 'GET' && target.decodedPathname === `${AUTH_PREFIX}/notify/pending`) {
+      const since = Number(new URL(target.raw, 'http://gateway.invalid').searchParams.get('since') ?? 0)
+      sendJson(response, 200, {
+        events: this.notifyEvents?.since(Number.isFinite(since) && since > 0 ? since : 0) ?? [],
+      }, this.tlsEnabled)
+      return
+    }
     const extension = requestedExtension
     if (extension !== undefined) {
       await this.handleExtensionRequest(extension, target, request, response, authorization)

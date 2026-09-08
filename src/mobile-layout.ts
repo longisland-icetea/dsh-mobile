@@ -44,6 +44,19 @@ interface LayoutSnapshot {
  */
 export const WIDE_LAYOUT_MIN_WIDTH_PX = 900
 
+/** Paired-device pending-notification feed served by the LAN gateway. */
+export const NOTIFY_PENDING_PATH = '/mobile-access/notify/pending'
+export const NOTIFY_POLL_MS = 10_000
+const NOTIFY_CURSOR_KEY = 'dsh-mobile-notify-cursor'
+
+interface NotifyPollEvent {
+  readonly id: string
+  readonly sessionId: string
+  readonly kind: string
+  readonly time: number
+  readonly message?: unknown
+}
+
 export function isWideViewportLayout(viewportWidth: number): boolean {
   return viewportWidth >= WIDE_LAYOUT_MIN_WIDTH_PX
 }
@@ -217,6 +230,63 @@ function MobileAppFrame(props: MobileRootProps & { readonly controller: MobileLa
   useEffect(() => {
     if (!hasSession) props.controller.closeDetails()
   }, [hasSession, props.controller])
+
+  // Task notifications for the phone page (#46): the host records
+  // completion/failure/approval events with dsh-messager semantics, but
+  // messager's client only runs in the desktop page. Poll the paired
+  // pending feed here and pop a system notification while hidden.
+  const sessionTitlesJson = props.useSessions(session => {
+    const entries: [string, string][] = []
+    for (const [id, info] of Object.entries(session.byId)) {
+      if (typeof info?.title === 'string' && info.title !== '') entries.push([id, info.title])
+    }
+    entries.sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    return JSON.stringify(entries)
+  })
+  const sessionTitlesRef = useRef<Record<string, string>>({})
+  sessionTitlesRef.current = Object.fromEntries(JSON.parse(sessionTitlesJson) as [string, string][])
+  useEffect(() => {
+    if (!('Notification' in window) || typeof window.fetch !== 'function') return
+    let disposed = false
+    let cursor = 0
+    try { cursor = Number(window.localStorage.getItem(NOTIFY_CURSOR_KEY) ?? 0) || 0 } catch { cursor = 0 }
+    const shown = new Set<string>()
+    const requestPermission = (): void => {
+      if (Notification.permission === 'default') void Notification.requestPermission().catch(() => undefined)
+    }
+    window.addEventListener('pointerdown', requestPermission, { once: true })
+    const poll = async (): Promise<void> => {
+      let events: NotifyPollEvent[] = []
+      try {
+        const response = await window.fetch(`/mobile-access/notify/pending?since=${String(cursor)}`)
+        if (!response.ok) return
+        const data: unknown = await response.json()
+        if (typeof data !== 'object' || data === null || !Array.isArray((data as { events?: unknown }).events)) return
+        events = (data as { events: NotifyPollEvent[] }).events.filter(entry =>
+          typeof entry === 'object' && entry !== null
+          && typeof entry.id === 'string' && typeof entry.sessionId === 'string'
+          && typeof entry.time === 'number')
+      } catch { return }
+      if (disposed) return
+      for (const event of events) {
+        if (event.time > cursor) cursor = event.time
+        if (shown.has(event.id)) continue
+        shown.add(event.id)
+        if (document.hidden && Notification.permission === 'granted') {
+          const title = sessionTitlesRef.current[event.sessionId] ?? messages.notifyUntitledSession
+          const body = event.kind === 'failed'
+            ? messages.notifyFailed + (typeof event.message === 'string' && event.message !== '' ? `：${event.message}` : '')
+            : event.kind === 'approval' ? messages.notifyApproval : messages.notifyDone
+          const notification = new Notification(title, { body, tag: event.id })
+          notification.onclick = (): void => { window.focus(); notification.close() }
+        }
+      }
+      try { window.localStorage.setItem(NOTIFY_CURSOR_KEY, String(cursor)) } catch { /* private mode */ }
+    }
+    void poll()
+    const timer = window.setInterval(() => { void poll() }, NOTIFY_POLL_MS)
+    return () => { disposed = true; window.clearInterval(timer); window.removeEventListener('pointerdown', requestPermission) }
+  }, [messages])
 
   // Mirror the stock layout: project the current session title into the
   // browser tab, restoring the product title when no session is selected.

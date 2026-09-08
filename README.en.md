@@ -43,7 +43,8 @@ It also lets you customize the phone from a DSH conversation: `/mobile <what you
 - **Image attachments**: use the top row of the composer plus menu to select an image or take a photo; PNG, JPEG, WebP, and GIF files up to 8 MiB are supported, plus full-resolution JPEG capture.
 - **Auto-discovery, no re-pairing**: Wi-Fi, hotspot, or IP changes normally recover automatically.
 - **One-click connection diagnostics**: check versions, gateway, network interface, firewall, and the remote path; stable reason codes are localized in the UI, and the copied report excludes credentials and complete addresses.
-- **One-click approval for third-party plugin WebSockets**: the diagnostics view records blocked plugin connections (with attempt counts); allowing a path unblocks that exact path while everything unapproved stays blocked (#47).
+- **One-click approval for third-party plugin WebSockets**: the diagnostics view groups blocked plugin connections by directory (with attempt counts); allowing a path unblocks that exact path while everything unapproved stays blocked, and a red badge marks the sidebar entry until reviewed (#47).
+- **Phone-page task notifications (in-page)**: system notifications for task completion/failure/approval even when the page is in the background (#46; native app push is out of scope).
 - **Faster reconnection**: trusted connections race during restore, revisioned assets are reused, and mobile boot batches are compressed.
 - **Three pairing options**: scan a QR code, paste a pairing link, or enter a key.
 
