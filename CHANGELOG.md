@@ -3,12 +3,11 @@
 Notable changes to DSH Mobile are recorded here. GitHub Releases remain the source for downloadable packages and complete generated commit notes.
 
 
-## 0.3.13 - 2026-09-07
+## 0.3.13 - 2026-09-08
 
-- Approve third-party plugin WebSocket paths with one click from the diagnostics view: blocked attempts are recorded with per-path counters and exact-path allow/revoke, behind the same local-admin trust as pairing (thanks @idoall for reporting #47).
-- Panel polish: number the FRP VPS deployment group as step 2, restyle its deploy-changes list, turn the path approval into a blue primary button, align the input with sibling fields, and auto-expand the VPS group until FRP is configured.
-- Group blocked WebSocket paths by parent directory with allow-all, and badge the sidebar entry with a red count until diagnostics is visited.
-- Phone-page task notifications (#46): the host records task completions (per-turn tool calls), failures, and approval requests with dsh-messager semantics and serves them to paired devices; the mobile page polls while hidden. In browsers a system notification pops; inside the Android app the page hands the event to the shell over the existing WebMessage bridge and the shell raises a real system notification (channel + Android 13 runtime permission).
+- Third-party WebSocket approval is interception-driven and generic: whenever a plugin's WebSocket connection is blocked, the diagnostics view groups the rejected paths by directory with attempt counts and offers per-path or allow-all approval, and both the sidebar entry and the in-panel diagnostics button carry a red badge until reviewed. Manual path entry is tucked under an “advanced” disclosure that most users never need to open (thanks @idoall for reporting #47). Badge changes are announced to screen readers and the disclosure has a visible focus ring.
+- Panel polish: number the FRP VPS deployment group as step 2, restyle its deploy-changes list, align the path input with sibling fields, and auto-expand the VPS group until FRP is configured.
+- Task notifications (#46): the host records long-task completions (at least seven tool calls in one turn), failures, and approval requests with dsh-messager semantics and serves them to paired devices over the gateway. A framework-free notifier polls that feed on every authenticated remote page — phone, narrow or wide desktop browser, or the Android shell — and raises one system notification per event while the page is hidden; the Android app asks for the notification permission on page mount instead of waiting for an event. Browser notifications cover all remote layouts. The Android shell notification is implemented but remains gated by system background policies: aggressive OEM doze may freeze the page (and with it polling) until the app is opened again.
 
 ## 0.3.12 - 2026-09-07
 
