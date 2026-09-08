@@ -126,25 +126,6 @@ describe('TaskNotifier', () => {
     dispose()
   })
 
-  it('hands events to the native shell bridge and requests permission up front', async () => {
-    const invoke = vi.fn(async () => ({ ok: true }))
-    const win = globalThis as unknown as { window: { __DSH_MOBILE_NATIVE__?: unknown } }
-    win.window.__DSH_MOBILE_NATIVE__ = { invoke }
-    const done = event('done')
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ events: [done] }), { status: 200 }))
-    pageHidden = true
-    const notifier = new TaskNotifier(MESSAGES)
-    const dispose = notifier.start()
-    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith('notify.ensure'), { timeout: 2000 })
-    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith('notify.show', expect.anything()), { timeout: 2000 })
-    expect(invoke).toHaveBeenLastCalledWith('notify.show', {
-      title: 'Untitled session', body: 'Task completed', tag: done.id, sessionId: 's1',
-    })
-    expect(shown.length).toBe(0)
-    dispose()
-    delete win.window.__DSH_MOBILE_NATIVE__
-  })
-
   it('registers one browser permission request per start and cleans it up', () => {
     const notifier = new TaskNotifier(MESSAGES)
     const dispose = notifier.start()
@@ -160,40 +141,6 @@ describe('TaskNotifier', () => {
     await new Promise(resolve => setTimeout(resolve, 30))
     expect(shown.length).toBe(0)
     dispose()
-  })
-
-  it('runs on a bridge-only surface (WebView without Notification) and ensures permission once', async () => {
-    // Simulate the Android WebView: no Notification global at all; the bridge
-    // is the only delivery path and is present when the page boots.
-    vi.unstubAllGlobals()
-    vi.stubGlobal('window', {
-      fetch: fetchMock,
-      localStorage: {
-        getItem: (key: string) => storage.get(key) ?? null,
-        setItem: (key: string, value: string) => { storage.set(key, String(value)) },
-      },
-      addEventListener: (type: string, fn: () => void) => { if (type === 'pointerdown') pointerListeners.add(fn) },
-      removeEventListener: (type: string, fn: () => void) => { if (type === 'pointerdown') pointerListeners.delete(fn) },
-      setInterval,
-      clearInterval,
-    })
-    vi.stubGlobal('document', { get hidden() { return pageHidden } })
-    const invoke = vi.fn(async () => ({ ok: true }))
-    const win = globalThis as unknown as { window: { __DSH_MOBILE_NATIVE__?: unknown } }
-    win.window.__DSH_MOBILE_NATIVE__ = { invoke }
-    const notifier = new TaskNotifier(MESSAGES)
-    pageHidden = true
-    const done = event('done')
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ events: [done] }), { status: 200 }))
-    const dispose = notifier.start()
-    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith('notify.ensure'), { timeout: 2000 })
-    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith('notify.show', expect.anything()), { timeout: 2000 })
-    // ensure is issued exactly once even though every poll re-checks for it.
-    const ensureCalls = invoke.mock.calls.filter(call => (call as unknown[])[0] === 'notify.ensure').length
-    expect(ensureCalls).toBe(1)
-    expect(shown.length).toBe(0)
-    dispose()
-    delete win.window.__DSH_MOBILE_NATIVE__
   })
 
   it('persists and reads the cursor across instances', () => {

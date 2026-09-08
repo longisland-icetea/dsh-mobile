@@ -107,6 +107,4 @@
     <string name="dsh_unavailable_message">请保持电脑端 DSH 与远程通道运行，然后重试。</string>
     <string name="remote_unreachable">远程通道不可达</string>
     <string name="remote_unreachable_message">提供方可能离线或当前网络不稳定。请在电脑端 DSH 重新连接所选远程通道。</string>
-    <string name="notify_channel_name">任务通知</string>
-    <string name="notify_channel_description">DSH 任务完成、失败与审批请求提醒</string>
 </resources>

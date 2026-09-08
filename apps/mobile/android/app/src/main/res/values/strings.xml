@@ -108,6 +108,4 @@
     <string name="dsh_unavailable_message">Keep DSH and the remote transport running on the computer, then retry.</string>
     <string name="remote_unreachable">Remote transport is unreachable</string>
     <string name="remote_unreachable_message">The provider may be offline or the network may be unstable. Reconnect the selected remote transport in desktop DSH.</string>
-    <string name="notify_channel_name">Task notifications</string>
-    <string name="notify_channel_description">Task completions, failures, and approval requests from DSH</string>
 </resources>
