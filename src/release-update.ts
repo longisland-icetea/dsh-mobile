@@ -8,7 +8,9 @@ import { DSH_MOBILE_VERSION } from './version.js'
 const PACKAGE_NAME = 'dsh-mobile'
 const NPM_LATEST_URL = 'https://registry.npmjs.org/dsh-mobile/latest'
 const GITHUB_LATEST_URL = 'https://github.com/saya-ch/dsh-mobile/releases/latest'
+const GITHUB_API_LATEST_URL = 'https://api.github.com/repos/saya-ch/dsh-mobile/releases/latest'
 const GITHUB_RELEASES_URL = 'https://github.com/saya-ch/dsh-mobile/releases'
+const RELEASE_NOTES_MAX_CHARS = 4000
 const STATUS_CACHE_MS = 10 * 60_000
 const REQUEST_TIMEOUT_MS = 8_000
 const UPDATE_TIMEOUT_MS = 120_000
@@ -36,6 +38,8 @@ export interface PluginReleaseStatus {
   readonly updateSupported: boolean
   readonly androidVersion?: string
   readonly androidDownloadUrl: string
+  /** Trimmed body of the latest GitHub release (What’s new + notices). */
+  readonly releaseNotes?: string
 }
 
 /** Result returned after the profile package has been replaced successfully. */
@@ -222,6 +226,19 @@ async function fetchAndroidVersion(fetcher: typeof globalThis.fetch): Promise<st
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
   return githubReleaseVersion(response.headers.get('location'), response.url)
+}
+
+/** Best-effort body of the latest GitHub release, trimmed to a bounded size. */
+async function fetchReleaseNotes(fetcher: typeof globalThis.fetch): Promise<string | undefined> {
+  const response = await fetcher(GITHUB_API_LATEST_URL, {
+    headers: { accept: 'application/vnd.github+json', 'user-agent': 'dsh-mobile-release-check' },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!response.ok) return undefined
+  const payload = await response.json() as { readonly body?: unknown }
+  if (typeof payload.body !== 'string') return undefined
+  const notes = payload.body.trim()
+  return notes === '' ? undefined : notes.slice(0, RELEASE_NOTES_MAX_CHARS)
 }
 
 async function readProfileInstalledVersion(profileDirectory: string): Promise<string | undefined> {
@@ -416,12 +433,14 @@ export class PluginReleaseManager {
     if (!force && this.cache !== undefined && this.cache.expiresAt > this.now()) return this.cache.status
     const dependencySpec = this.profileDirectory === undefined ? undefined : await profileDependencySpec(this.profileDirectory)
     const updateSupported = isRegistryPluginSpec(dependencySpec)
-    const [npmResult, androidResult] = await Promise.allSettled([
+    const [npmResult, androidResult, notesResult] = await Promise.allSettled([
       fetchNpmVersion(this.fetcher),
       fetchAndroidVersion(this.fetcher),
+      fetchReleaseNotes(this.fetcher),
     ])
     const latestVersion = npmResult.status === 'fulfilled' ? npmResult.value : undefined
     const androidVersion = androidResult.status === 'fulfilled' ? androidResult.value : undefined
+    const releaseNotes = notesResult.status === 'fulfilled' ? notesResult.value : undefined
     const comparison = latestVersion === undefined
       ? undefined
       : comparePluginVersions(latestVersion, this.installedVersion)
@@ -432,6 +451,7 @@ export class PluginReleaseManager {
       updateSupported,
       ...(androidVersion === undefined ? {} : { androidVersion }),
       androidDownloadUrl: androidReleaseDownloadUrl(androidVersion),
+      ...(releaseNotes === undefined ? {} : { releaseNotes }),
     })
     this.cache = { expiresAt: this.now() + STATUS_CACHE_MS, status }
     return status

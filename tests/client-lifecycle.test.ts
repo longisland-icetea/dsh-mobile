@@ -67,6 +67,28 @@ describe('mobile-control localization', () => {
       latestVersion: '0.4.1',
       androidVersion: '0.4.1',
       androidDownloadUrl: 'https://github.com/saya-ch/dsh-mobile/releases/download/v0.4.1/dsh-mobile-android-v0.4.1.apk',
+      releaseNotes: '## notes',
+    })).toEqual({
+      updateAvailable: true,
+      latestVersion: '0.4.1',
+      androidVersion: '0.4.1',
+      androidDownloadUrl: 'https://github.com/saya-ch/dsh-mobile/releases/download/v0.4.1/dsh-mobile-android-v0.4.1.apk',
+      releaseNotes: '## notes',
+    })
+    expect(clientReleaseInfo({
+      updateAvailable: true,
+      latestVersion: '0.4.1',
+      releaseNotes: '',
+    })).toEqual({
+      updateAvailable: true,
+      latestVersion: '0.4.1',
+      androidDownloadUrl: 'https://github.com/saya-ch/dsh-mobile/releases',
+    })
+    expect(clientReleaseInfo({
+      updateAvailable: true,
+      latestVersion: '0.4.1',
+      androidVersion: '0.4.1',
+      androidDownloadUrl: 'https://github.com/saya-ch/dsh-mobile/releases/download/v0.4.1/dsh-mobile-android-v0.4.1.apk',
     })).toEqual({
       updateAvailable: true,
       latestVersion: '0.4.1',

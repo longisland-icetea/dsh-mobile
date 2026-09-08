@@ -211,6 +211,8 @@ export interface ClientReleaseInfo {
   readonly latestVersion?: string
   readonly androidVersion?: string
   readonly androidDownloadUrl: string
+  /** Trimmed release notes body for the preview card (best effort). */
+  readonly releaseNotes?: string
 }
 
 function releaseVersion(value: unknown): string | undefined {
@@ -235,6 +237,7 @@ export function clientReleaseInfo(data: Readonly<Record<string, unknown>>): Clie
     ...(latestVersion === undefined ? {} : { latestVersion }),
     ...(androidVersion === undefined ? {} : { androidVersion }),
     androidDownloadUrl,
+    ...(typeof data.releaseNotes === 'string' && data.releaseNotes !== '' ? { releaseNotes: data.releaseNotes.slice(0, 4000) } : {}),
   }
 }
 
@@ -298,6 +301,15 @@ function installControl(): { remove: () => void; toggle: () => void; isOpen: () 
   const title = element('h2'); title.textContent = t('mobileAccess')
   const headerActions = element('div', 'dsh-mobile-control__header-actions')
   const updatePlugin = element('button', 'dsh-mobile-control__update-plugin'); updatePlugin.type = 'button'; updatePlugin.textContent = t('updatePlugin'); updatePlugin.hidden = true
+  // Preview card shown before applying an update: what’s new + notices, then confirm.
+  const updateCard = element('div', 'dsh-mobile-control__update-card'); updateCard.hidden = true
+  const updateCardTitle = element('div', 'dsh-mobile-control__update-card-title')
+  const updateCardNotes = element('pre', 'dsh-mobile-control__update-notes'); updateCardNotes.setAttribute('tabindex', '0')
+  const updateCardNotice = element('p', 'dsh-mobile-control__update-notice'); updateCardNotice.textContent = t('updateNotice')
+  const updateActions = element('div', 'dsh-mobile-control__update-actions')
+  const updateNow = element('button', 'dsh-mobile-control__primary'); updateNow.type = 'button'; updateNow.textContent = t('updateNow')
+  const updateLater = element('button', 'dsh-mobile-control__secondary'); updateLater.type = 'button'; updateLater.textContent = t('updateLater')
+  updateActions.append(updateLater, updateNow); updateCard.append(updateCardTitle, updateCardNotes, updateCardNotice, updateActions)
   const diagnosticsEntry = element('button', 'dsh-mobile-control__diagnostic-entry'); diagnosticsEntry.type = 'button'; diagnosticsEntry.textContent = t('diagnostics'); diagnosticsEntry.setAttribute('aria-label', t('openDiagnostics')); diagnosticsEntry.setAttribute('aria-pressed', 'false')
   const close = element('button', 'dsh-mobile-control__close'); close.type = 'button'; close.textContent = '×'; close.setAttribute('aria-label', t('collapseMobileAccess'))
   headerActions.append(updatePlugin, diagnosticsEntry, close)
@@ -676,7 +688,7 @@ function installControl(): { remove: () => void; toggle: () => void; isOpen: () 
   lanView.append(access, qrBox, status, extensionStatus, actions, manageRow, devicePanel)
   remoteView.append(remoteIntro, providerSection, remoteWorkspace)
   diagnosticsView.append(diagnosticsIntro, diagnosticsSummary, diagnosticsToolbar, diagnosticsFeedback, diagnosticsChecks, wsPathsSection, diagnosticsDetails)
-  panel.append(header, releaseNotice, appDownload, switcher, lanView, remoteView, diagnosticsView); root.append(panel); document.body.append(root)
+  panel.append(header, releaseNotice, updateCard, appDownload, switcher, lanView, remoteView, diagnosticsView); root.append(panel); document.body.append(root)
   let running = false
   let origin = ''
   let remoteRunning = false
@@ -704,11 +716,14 @@ function installControl(): { remove: () => void; toggle: () => void; isOpen: () 
   let copiedDiagnosticReport = ''
   let pluginUpdateAvailable = false
   let pluginLatestVersion = ''
+  let pluginReleaseNotes = ''
+  let updateInFlight = false
   const renderRelease = (data: Record<string, unknown>): void => {
     const release = clientReleaseInfo(data)
     pluginUpdateAvailable = release.updateAvailable
     pluginLatestVersion = release.latestVersion ?? ''
-    updatePlugin.hidden = !pluginUpdateAvailable || !diagnosticsView.hidden
+    pluginReleaseNotes = release.releaseNotes ?? ''
+    updatePlugin.hidden = !pluginUpdateAvailable || !diagnosticsView.hidden || !updateCard.hidden
     updatePlugin.textContent = t('updatePlugin')
     if (pluginLatestVersion !== '') updatePlugin.setAttribute('aria-label', t('updatePluginAria', { version: pluginLatestVersion }))
     if (release.androidVersion !== undefined) {
@@ -1640,25 +1655,47 @@ function installControl(): { remove: () => void; toggle: () => void; isOpen: () 
     selectView('diagnostics'); loadDiagnostics()
   })
   diagnosticsRun.addEventListener('click', loadDiagnostics)
-  updatePlugin.addEventListener('click', () => {
-    if (!pluginUpdateAvailable || pluginLatestVersion === '') return
-    updatePlugin.disabled = true
-    updatePlugin.textContent = t('updatingPlugin')
+  const closeUpdateCard = (): void => {
+    updateCard.hidden = true
+    if (pluginUpdateAvailable && pluginLatestVersion !== '') updatePlugin.hidden = !diagnosticsView.hidden
+  }
+  const runPluginUpdate = (): void => {
+    if (!pluginUpdateAvailable || pluginLatestVersion === '' || updateInFlight) return
+    updateInFlight = true
+    updateNow.disabled = true
+    updateLater.disabled = true
+    updateCardTitle.textContent = t('updatingPlugin')
     releaseNotice.hidden = true
     releaseNotice.classList.remove('is-error')
     void controlRequestJson('/api/mobile-access/release/update', { method: 'POST', body: '{}' }, LONG_CONTROL_REQUEST_TIMEOUT_MS).then(data => {
       const installedVersion = releaseVersion(data.installedVersion) ?? pluginLatestVersion
       pluginUpdateAvailable = false
+      updateCard.hidden = true
       updatePlugin.hidden = true
       releaseNotice.textContent = t('pluginUpdatedRestart', { version: installedVersion })
       releaseNotice.hidden = false
     }, error => {
-      updatePlugin.textContent = t('updatePlugin')
+      updateCard.hidden = true
+      updatePlugin.hidden = false
       releaseNotice.textContent = t('pluginUpdateFailed', { error: String(error) })
       releaseNotice.classList.add('is-error')
       releaseNotice.hidden = false
-    }).finally(() => { updatePlugin.disabled = false })
+    }).finally(() => {
+      updateInFlight = false
+      updateNow.disabled = false
+      updateLater.disabled = false
+    })
+  }
+  updatePlugin.addEventListener('click', () => {
+    if (!pluginUpdateAvailable || pluginLatestVersion === '' || updateInFlight) return
+    updatePlugin.hidden = true
+    updateCardTitle.textContent = t('updateTo', { version: pluginLatestVersion })
+    updateCardNotes.textContent = pluginReleaseNotes === '' ? t('updateNotesEmpty') : pluginReleaseNotes
+    updateCardNotes.hidden = pluginReleaseNotes === ''
+    updateCard.hidden = false
   })
+  updateNow.addEventListener('click', runPluginUpdate)
+  updateLater.addEventListener('click', closeUpdateCard)
   diagnosticsCopy.addEventListener('click', () => {
     if (copiedDiagnosticReport === '') return
     void navigator.clipboard.writeText(copiedDiagnosticReport).then(() => {
@@ -2666,7 +2703,7 @@ export const CONTROL_STYLES = `
 .dsh-mobile-control{position:fixed;z-index:1000;left:16px;bottom:112px;font:14px/1.45 system-ui;color:var(--dsw-alias-label-primary,#16181d)}
 .dsh-mobile-control__panel{box-sizing:border-box;width:min(380px,calc(100vw - 32px));max-height:calc(100vh - 140px);overflow-y:auto;padding:16px;border:1px solid var(--dsw-alias-border-subtle,#e1e5eb);border-radius:18px;background:var(--dsw-alias-bg-layer-2,#fff);box-shadow:0 18px 50px rgb(15 23 42 / 18%)}
 .dsh-mobile-control__header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}.dsh-mobile-control__panel h2{margin:0;font-size:17px;line-height:24px}.dsh-mobile-control__header-actions{display:flex;align-items:center;gap:2px}.dsh-mobile-control__update-plugin,.dsh-mobile-control__diagnostic-entry,.dsh-mobile-control__close{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:44px;padding:0;border:0;border-radius:10px;background:transparent;color:inherit;cursor:pointer}.dsh-mobile-control__update-plugin,.dsh-mobile-control__diagnostic-entry{padding:0 8px;color:#2563eb;font:650 12px/1 system-ui;white-space:nowrap}.dsh-mobile-control__update-plugin[hidden]{display:none}.dsh-mobile-control__update-plugin:disabled{cursor:wait;opacity:.55}.dsh-mobile-control__close{font-size:24px;line-height:1}.dsh-mobile-control__update-plugin:hover:not(:disabled),.dsh-mobile-control__diagnostic-entry:hover,.dsh-mobile-control__close:hover{background:var(--dsw-alias-interactive-bg-hover,#f1f3f6)}
-.dsh-mobile-control__release-notice{margin:-2px 0 10px;padding:8px 10px;border-radius:9px;background:var(--dsw-alias-bg-layer-1,#eff6ff);color:var(--dsw-alias-label-primary,#1d4ed8);font-size:11px;line-height:1.45}.dsh-mobile-control__release-notice.is-error{color:#dc2626}.dsh-mobile-control__release-notice[hidden]{display:none}.dsh-mobile-control__app-download{display:flex;align-items:center;justify-content:space-between;box-sizing:border-box;min-height:38px;margin:0 0 10px;padding:8px 11px;border:1px solid var(--dsw-alias-border-subtle,#dbe1e8);border-radius:11px;background:var(--dsw-alias-bg-layer-1,#f7f8fa);color:var(--dsw-alias-label-primary,#16181d);font:600 12px/1.3 system-ui;text-decoration:none}.dsh-mobile-control__app-download[hidden]{display:none}.dsh-mobile-control__app-download::after{color:#2563eb;font-size:14px;content:"↗"}.dsh-mobile-control__app-download:hover{border-color:#9fb9e8;background:var(--dsw-alias-interactive-bg-hover-solid,var(--dsw-alias-bg-layer-2,#f5f8ff));color:var(--dsw-alias-label-primary,#1d4ed8)}
+.dsh-mobile-control__release-notice{margin:-2px 0 10px;padding:8px 10px;border-radius:9px;background:var(--dsw-alias-bg-layer-1,#eff6ff);color:var(--dsw-alias-label-primary,#1d4ed8);font-size:11px;line-height:1.45}.dsh-mobile-control__release-notice.is-error{color:#dc2626}.dsh-mobile-control__release-notice[hidden]{display:none}.dsh-mobile-control__update-card{margin:0 0 10px;padding:11px;border:1px solid var(--dsw-alias-border-subtle,#dbe1e8);border-radius:12px;background:var(--dsw-alias-bg-layer-1,#f8fafc)}.dsh-mobile-control__update-card[hidden]{display:none}.dsh-mobile-control__update-card-title{margin:0 0 7px;color:var(--dsw-alias-label-primary,#16181d);font:650 13px/1.4 system-ui}.dsh-mobile-control__update-notes{display:block;box-sizing:border-box;max-height:150px;overflow-y:auto;margin:0 0 8px;padding:8px 10px;border:1px solid var(--dsw-alias-border-subtle,#e1e5eb);border-radius:9px;background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-secondary,#475569);white-space:pre-wrap;word-break:break-word;font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.dsh-mobile-control__update-notes[hidden]{display:none}.dsh-mobile-control__update-notice{margin:0 0 9px;padding:7px 9px;border-radius:8px;background:#fff4d6;color:#92400e;font-size:11px;line-height:1.5}.dsh-mobile-control__update-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px}.dsh-mobile-control__update-actions .dsh-mobile-control__primary,.dsh-mobile-control__update-actions .dsh-mobile-control__secondary{min-height:34px;padding:0 12px}.dsh-mobile-control__app-download{display:flex;align-items:center;justify-content:space-between;box-sizing:border-box;min-height:38px;margin:0 0 10px;padding:8px 11px;border:1px solid var(--dsw-alias-border-subtle,#dbe1e8);border-radius:11px;background:var(--dsw-alias-bg-layer-1,#f7f8fa);color:var(--dsw-alias-label-primary,#16181d);font:600 12px/1.3 system-ui;text-decoration:none}.dsh-mobile-control__app-download[hidden]{display:none}.dsh-mobile-control__app-download::after{color:#2563eb;font-size:14px;content:"↗"}.dsh-mobile-control__app-download:hover{border-color:#9fb9e8;background:var(--dsw-alias-interactive-bg-hover-solid,var(--dsw-alias-bg-layer-2,#f5f8ff));color:var(--dsw-alias-label-primary,#1d4ed8)}
 .dsh-mobile-control__switcher{display:grid;grid-template-columns:repeat(2,1fr);gap:4px;margin:0 0 14px;padding:4px;border-radius:12px;background:var(--dsw-alias-bg-layer-1,#f3f5f8)}.dsh-mobile-control__switcher[hidden]{display:none}.dsh-mobile-control__tab{min-height:36px;border:0;border-radius:9px;background:transparent;color:var(--dsw-alias-label-secondary,#606873);font:600 13px/1 system-ui;cursor:pointer}.dsh-mobile-control__tab.is-active{background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#16181d);box-shadow:0 1px 3px rgb(15 23 42 / 10%)}.dsh-mobile-control__view[hidden]{display:none}.dsh-mobile-control__intro{margin:0 0 12px;color:var(--dsw-alias-label-secondary,#606873);font-size:12px;line-height:1.55}.dsh-mobile-control__view.is-remote .dsh-mobile-control__actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.dsh-mobile-control__view.is-remote .dsh-mobile-control__actions button[hidden]{display:none}
 .dsh-mobile-control__provider-section{position:relative;margin:0 0 14px}.dsh-mobile-control__section-title{margin:0 0 8px;color:var(--dsw-alias-label-primary,#16181d);font:650 13px/1.4 system-ui}.dsh-mobile-control__provider-section>.dsh-mobile-control__section-title{padding-right:42px}.dsh-mobile-control__provider-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.dsh-mobile-control__provider{display:flex;min-width:0;flex-direction:column;gap:6px;min-height:94px;padding:10px 11px;border:1px solid var(--dsw-alias-border-subtle,#dbe1e8);border-radius:13px;background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#16181d);text-align:left;cursor:pointer;touch-action:manipulation;transition:border-color 160ms ease,background-color 160ms ease,box-shadow 160ms ease}.dsh-mobile-control__provider:hover{border-color:#6f96db;background:var(--dsw-alias-interactive-bg-hover-solid,var(--dsw-alias-bg-layer-1,#f8fbff))}.dsh-mobile-control__provider.is-selected{border-color:#2563eb;background:var(--dsw-alias-interactive-bg-active,var(--dsw-alias-bg-layer-1,#f5f8ff));box-shadow:0 0 0 1px #2563eb inset}.dsh-mobile-control__provider:disabled{cursor:wait;opacity:.62}.dsh-mobile-control__provider-top{display:flex;min-width:0;align-items:flex-start;justify-content:space-between;gap:5px}.dsh-mobile-control__provider-top strong{min-width:0;font-size:12px;line-height:1.3}.dsh-mobile-control__provider-badge{flex:none;padding:2px 5px;border-radius:999px;background:#e8f0ff;color:#1d4ed8;font:650 9px/1.25 system-ui}.dsh-mobile-control__provider-badge.is-cpolar{background:#eaf8f2;color:#087454}.dsh-mobile-control__provider-description{color:var(--dsw-alias-label-secondary,#606873);font-size:10px;line-height:1.45}.dsh-mobile-control__provider-info{position:absolute;z-index:5;top:-13px;right:-8px}.dsh-mobile-control__provider-info-button{display:flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0;border:0;border-radius:50%;background:transparent;color:var(--dsw-alias-label-secondary,#475569);cursor:pointer;touch-action:manipulation}.dsh-mobile-control__provider-info-button:hover{background:var(--dsw-alias-interactive-bg-hover,#f1f5f9);color:#2563eb}.dsh-mobile-control__provider-info-glyph{display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:18px;height:18px;border:1.5px solid currentColor;border-radius:50%;font:700 12px/1 system-ui}.dsh-mobile-control__provider-info-popover{position:absolute;z-index:6;top:38px;right:4px;box-sizing:border-box;width:min(292px,calc(100vw - 72px));padding:10px 12px;border:1px solid var(--dsw-alias-border-subtle,#dbe1e8);border-radius:12px;background:var(--dsw-alias-bg-layer-2,#fff);box-shadow:0 10px 28px rgb(15 23 42 / 16%)}.dsh-mobile-control__provider-info-popover[hidden]{display:none}.dsh-mobile-control__provider-info-popover strong,.dsh-mobile-control__provider-info-popover span{display:block}.dsh-mobile-control__provider-info-popover strong{margin-bottom:3px;font-size:12px}.dsh-mobile-control__provider-info-popover span{color:var(--dsw-alias-label-secondary,#606873);font-size:11px;line-height:1.55}
 .dsh-mobile-control__self-hosted{margin:8px 0 0;border:1px solid var(--dsw-alias-border-subtle,#dbe1e8);border-radius:12px;background:var(--dsw-alias-bg-layer-1,#f8fafc)}.dsh-mobile-control__self-hosted-summary{display:flex;box-sizing:border-box;min-height:48px;align-items:center;justify-content:space-between;gap:10px;padding:8px 11px;cursor:pointer;list-style-position:inside}.dsh-mobile-control__self-hosted-summary>span:first-child{display:flex;min-width:0;flex-direction:column;gap:1px}.dsh-mobile-control__self-hosted-summary strong{font-size:11px}.dsh-mobile-control__self-hosted-summary span span{color:var(--dsw-alias-label-secondary,#606873);font-size:9px;line-height:1.35}.dsh-mobile-control__provider-badge.is-frp{background:#eef0f3;color:#475569}.dsh-mobile-control__self-hosted-body{padding:0 8px 8px}.dsh-mobile-control__provider.is-frp{width:100%;min-height:64px;background:var(--dsw-alias-bg-layer-2,#fff)}
