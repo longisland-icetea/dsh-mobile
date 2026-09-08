@@ -19,7 +19,7 @@
 
 > DSH Mobile is a DeepSeek Harness community plugin; the native app supports Android only.
 >
-> **0.3.13 update**: interception-driven, plugin-agnostic WebSocket approval — grouped blocked paths, dual red badges, manual entry under an advanced disclosure (#47) — plus panel polish (FRP step numbering, deploy-notes layout, approval button). [Details](CHANGELOG.md).
+> **0.3.13 update**: interception-driven, plugin-agnostic WebSocket approval — grouped blocked paths, dual red badges, manual entry under an advanced disclosure (#47) — plus panel polish (FRP step numbering, deploy-notes layout, approval button) and adaptation to DeepSeek Harness 0.1.3-alpha.2 (layout right-bar slot rename). [Details](CHANGELOG.md).
 >
 > **Upgrade reminder**: Windows DSH Desktop users should update to plugin 0.3.13. Existing 0.3.3-0.3.12 apps and paired devices remain compatible without re-pairing. [Compatibility notes](#compatibility).
 

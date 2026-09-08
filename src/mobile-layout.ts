@@ -315,7 +315,13 @@ function MobileAppFrame(props: MobileRootProps & { readonly controller: MobileLa
       className: 'dshm-details',
       'data-open': state.detailsOpen,
       ...(state.detailsOpen ? {} : { inert: '' }),
-    }, hasSession ? props.renderSlot('details', {}) : undefined),
+    }, hasSession ? props.renderSlot('rightbar', {
+      width: Math.min(window.innerWidth * 0.94, 460),
+      viewportWidth: window.innerWidth,
+      // Right track needs ~300px next to a ~400px center; below that the
+      // column cannot show and narrow phones see the drawer overlay instead.
+      canShow: window.innerWidth >= 720,
+    }) : undefined),
     createElement('div', { className: 'dshm-overlay', 'data-shell-overlay': true }, props.renderSlot('shell.overlay', {})),
   )
 }
@@ -339,7 +345,7 @@ export function apply(ctx: MobileClientContext): void {
       children: {
         sidebar: { kind: 'single', scope: 'root' },
         conversation: { kind: 'single', scope: 'session-maybe' },
-        details: { kind: 'single', scope: 'session' },
+        rightbar: { kind: 'single', scope: 'session' },
         'shell.overlay': { kind: 'list', scope: 'root' },
       },
     }, props => createElement(MobileAppFrame, { ...props, controller }))

@@ -84,7 +84,7 @@ const layoutSource = await text('packages/client/ui-layout/src/client/index.ts')
 for (const declaration of [
   "'sidebar': { kind: 'single', scope: 'root' }",
   "'conversation': { kind: 'single', scope: 'session-maybe' }",
-  "'details': { kind: 'single', scope: 'session' }",
+  "'rightbar': { kind: 'single', scope: 'session' }",
   "'shell.overlay': { kind: 'list', scope: 'root' }",
   "ctx.reflect.provide('layout'",
 ]) {
