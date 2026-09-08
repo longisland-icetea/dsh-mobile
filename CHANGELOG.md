@@ -3,10 +3,10 @@
 Notable changes to DSH Mobile are recorded here. GitHub Releases remain the source for downloadable packages and complete generated commit notes.
 
 
-## 0.3.13 - 2026-09-07
+## 0.3.13 - 2026-09-08
 
-- Approve third-party plugin WebSocket paths with one click from the diagnostics view: blocked attempts are recorded with per-path counters and exact-path allow/revoke, behind the same local-admin trust as pairing (thanks @idoall for reporting #47).
-- Panel polish: number the FRP VPS deployment group as step 2, restyle its deploy-changes list, turn the path approval into a blue primary button, align the input with sibling fields, and auto-expand the VPS group until FRP is configured.
+- Third-party WebSocket approval is interception-driven and generic: whenever a plugin's WebSocket connection is blocked, the diagnostics view groups the rejected paths by directory with attempt counts and offers per-path or allow-all approval, behind the same local-admin trust as pairing, and both the sidebar entry and the in-panel diagnostics button carry a red badge until reviewed. Manual path entry is tucked under an “advanced” disclosure that most users never need to open (thanks @idoall for reporting #47). Badge changes are announced to screen readers and the disclosure has a visible focus ring.
+- Panel polish: number the FRP VPS deployment group as step 2, restyle its deploy-changes list, align the path input with sibling fields, and auto-expand the VPS group until FRP is configured.
 
 ## 0.3.12 - 2026-09-07
 
