@@ -261,6 +261,12 @@ function MobileAppFrame(props: MobileRootProps & { readonly controller: MobileLa
       void Notification.requestPermission().catch(() => undefined)
     }
     window.addEventListener('pointerdown', requestPermission, { once: true })
+    if (canNativeNotify) {
+      // Ask for the Android 13 runtime permission up front, not on the first
+      // event: events are TTL'd and WebView timers throttle in the background,
+      // so waiting would often mean never asking.
+      nativeBridge!.invoke('notify.ensure').catch(() => undefined)
+    }
     const poll = async (): Promise<void> => {
       let events: NotifyPollEvent[] = []
       try {

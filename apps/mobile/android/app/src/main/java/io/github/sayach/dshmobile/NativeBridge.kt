@@ -395,6 +395,12 @@ internal class NativeBridge(
                 }
                 "clipboard.read" -> startClipboardRead(requestId)
                 "clipboard.write" -> startClipboardWrite(requestId, input.optString("text", ""))
+                "notify.ensure" -> {
+                    activity.runOnUiThread {
+                        if (installed && !Notifications.permissionGranted(activity)) Notifications.requestPermission(activity)
+                        finishPending(requestId, successJson(requestId, JSONObject().put("ok", true)))
+                    }
+                }
                 "notify.show" -> {
                     val title = input.optString("title", "")
                     val tag = input.optString("tag", "")
