@@ -275,7 +275,9 @@ function MobileAppFrame(props: MobileRootProps & { readonly controller: MobileLa
         if (document.hidden && Notification.permission === 'granted') {
           const title = sessionTitlesRef.current[event.sessionId] ?? messages.notifyUntitledSession
           const body = event.kind === 'failed'
-            ? messages.notifyFailed + (typeof event.message === 'string' && event.message !== '' ? `：${event.message}` : '')
+            ? typeof event.message === 'string' && event.message !== ''
+              ? messages.notifyFailedDetail.replace('{message}', event.message)
+              : messages.notifyFailed
             : event.kind === 'approval' ? messages.notifyApproval : messages.notifyDone
           const notification = new Notification(title, { body, tag: event.id })
           notification.onclick = (): void => { window.focus(); notification.close() }

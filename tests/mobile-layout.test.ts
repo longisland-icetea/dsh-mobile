@@ -296,6 +296,7 @@ describe('dedicated mobile layout boot', () => {
       workspaceNavigation: 'Navigazione area di lavoro e sessioni',
       notifyDone: 'Attività completata',
       notifyFailed: 'Attività non riuscita',
+      notifyFailedDetail: 'Attività non riuscita: {message}',
       notifyApproval: 'Input richiesto',
       notifyUntitledSession: 'Sessione senza titolo',
     })

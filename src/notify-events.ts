@@ -12,17 +12,27 @@ export interface NotifyEvent {
 
 export const MAX_NOTIFY_EVENTS = 32
 export const NOTIFY_EVENT_TTL_MS = 10 * 60 * 1000
-const MIN_RUN_MS = 5_000
 
 /**
- * In-memory completion/failure/approval events for the phone page.
- * Same trigger semantics as dsh-messager (agent running→idle, agent/error,
- * approval/asked) but served to paired devices so the remote page can pop
- * a notification; a restart clears it (events reappear on the next run).
+ * In-memory completion/failure/approval events for the phone page,
+ * aligned with dsh-messager semantics:
+ *
+ * - a turn that ran at least MIN_NOTIFY_TOOL_CALLS tools and ended cleanly
+ *   is a task completion;
+ * - a turn that ended in error is a failure (retries within a step only
+ *   append llm/retry and never close the turn, so each failed turn yields
+ *   exactly one event; aborted/blocked/max-tokens/interrupted never notify);
+ * - approval/asked is an approval request.
+ *
+ * Only top-level sessions (delegationDepth absent) notify for done/failed;
+ * subagent chatter stays silent. Counters are per-turn in memory and reset
+ * on every turn/start, so a host restart cannot invent a running state — the
+ * crash-orphaned closer (interrupted) simply does not notify. A restart
+ * clears the buffer; events reappear on the next qualifying turn.
  */
 export class NotifyEventLog {
   private readonly events: NotifyEvent[] = []
-  private readonly agentState = new Map<string, { status: string; runningSince: number }>()
+  private readonly turnToolCalls = new Map<string, number>()
 
   record(kind: NotifyEventKind, sessionId: string, message?: string): NotifyEvent {
     const time = Date.now()
@@ -39,17 +49,20 @@ export class NotifyEventLog {
     return event
   }
 
-  onAgentStatus(agentId: string, status: string): NotifyEvent | undefined {
-    const now = Date.now()
-    const previous = this.agentState.get(agentId)
-    if (status === 'running') {
-      if (previous?.status !== 'running') this.agentState.set(agentId, { status, runningSince: now })
+  onTurnEvent(sessionId: string, type: string, root: boolean, reasonKind?: string, error?: unknown): NotifyEvent | undefined {
+    if (type === 'approval/asked') return this.record('approval', sessionId)
+    if (type === 'turn/start') {
+      this.turnToolCalls.set(sessionId, 0)
       return undefined
     }
-    this.agentState.set(agentId, { status, runningSince: previous?.runningSince ?? now })
-    if (previous?.status === 'running' && now - previous.runningSince >= MIN_RUN_MS) {
-      return this.record('done', agentId)
+    if (type === 'tool/call') {
+      this.turnToolCalls.set(sessionId, (this.turnToolCalls.get(sessionId) ?? 0) + 1)
+      return undefined
     }
+    if (type !== 'turn/end' || !root) return undefined
+    const toolCalls = this.turnToolCalls.get(sessionId) ?? 0
+    if (reasonKind === 'error') return this.record('failed', sessionId, truncateError(error))
+    if (reasonKind === 'completed' && toolCalls >= MIN_NOTIFY_TOOL_CALLS) return this.record('done', sessionId)
     return undefined
   }
 
@@ -65,25 +78,26 @@ export class NotifyEventLog {
   }
 }
 
-const truncateMessage = (value: unknown): string | undefined => {
-  const text = typeof value === 'object' && value !== null && 'message' in value
-    ? String((value as { message?: unknown }).message ?? value)
-    : String(value ?? '')
+/** Long-task floor, matching dsh-messager's default. */
+export const MIN_NOTIFY_TOOL_CALLS = 7
+
+const truncateError = (error: unknown): string | undefined => {
+  const text = typeof error === 'object' && error !== null && 'message' in error
+    ? String((error as { message?: unknown }).message ?? '')
+    : String(error ?? '')
   const clean = text.replace(/\s+/gu, ' ').trim().slice(0, 120)
   return clean === '' ? undefined : clean
 }
 
-/** Subscribe the log to host agent/session events; returns a dispose function. */
+/** Subscribe the log to host session events; returns a dispose function. */
 export function subscribeNotifyEvents(ctx: Context, log: NotifyEventLog): () => void {
-  const disposables: (() => void)[] = []
-  disposables.push(ctx.on('agent/status', (payload: { agent: { id: string }; status: string }) => {
-    log.onAgentStatus(payload.agent.id, payload.status)
-  }))
-  disposables.push(ctx.on('agent/error', (payload: { agent: { id: string }; error?: unknown }) => {
-    log.record('failed', payload.agent.id, truncateMessage(payload.error))
-  }))
-  disposables.push(ctx.on('session/event', (session: { id: string }, event: { type: string }) => {
-    if (event.type === 'approval/asked') log.record('approval', session.id)
-  }))
-  return () => { for (const dispose of disposables) dispose() }
+  // The supertypes are intentionally wide: SessionEvent is a closed union
+  // with per-kind data shapes, so the callback narrows only the turn/end arm.
+  return ctx.on('session/event', (session: { readonly id: string; readonly header?: { readonly delegationDepth?: number } }, event: { readonly type: string }) => {
+    const root = (session.header?.delegationDepth ?? 0) === 0
+    const reason = event.type === 'turn/end'
+      ? (event as { data?: { reason?: { kind?: string; error?: unknown } } }).data?.reason
+      : undefined
+    log.onTurnEvent(session.id, event.type, root, reason?.kind, reason?.error)
+  })
 }
