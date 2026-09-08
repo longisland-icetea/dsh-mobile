@@ -1,5 +1,6 @@
 import { createElement, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
+import { TaskNotifier } from './task-notifier.js'
 import { MOBILE_LAYOUT_MESSAGES, type MobileLayoutLanguage } from './mobile-layout-messages.js'
 
 export { MOBILE_LAYOUT_MESSAGES } from './mobile-layout-messages.js'
@@ -37,25 +38,14 @@ interface LayoutSnapshot {
   readonly detailsOpen: boolean
 }
 
+export { NOTIFY_PENDING_PATH, NOTIFY_POLL_MS } from './task-notifier.js'
+
 /**
  * Viewport width at which the dedicated layout treats the sidebar as a
  * persistent desktop panel instead of an overlay drawer. Narrow screens
  * keep the overlay behavior byte-for-byte.
  */
 export const WIDE_LAYOUT_MIN_WIDTH_PX = 900
-
-/** Paired-device pending-notification feed served by the LAN gateway. */
-export const NOTIFY_PENDING_PATH = '/mobile-access/notify/pending'
-export const NOTIFY_POLL_MS = 10_000
-const NOTIFY_CURSOR_KEY = 'dsh-mobile-notify-cursor'
-
-interface NotifyPollEvent {
-  readonly id: string
-  readonly sessionId: string
-  readonly kind: string
-  readonly time: number
-  readonly message?: unknown
-}
 
 export function isWideViewportLayout(viewportWidth: number): boolean {
   return viewportWidth >= WIDE_LAYOUT_MIN_WIDTH_PX
@@ -232,9 +222,10 @@ function MobileAppFrame(props: MobileRootProps & { readonly controller: MobileLa
   }, [hasSession, props.controller])
 
   // Task notifications for the phone page (#46): the host records
-  // completion/failure/approval events with dsh-messager semantics, but
-  // messager's client only runs in the desktop page. Poll the paired
-  // pending feed here and pop a system notification while hidden.
+  // completion/failure/approval events with dsh-messager semantics. The
+  // shared TaskNotifier polls the paired-device feed on any authenticated
+  // mobile surface (phone, narrow or wide browser, or the Android shell)
+  // and pops a system notification while hidden.
   const sessionTitlesJson = props.useSessions(session => {
     const entries: [string, string][] = []
     for (const [id, info] of Object.entries(session.byId)) {
@@ -246,69 +237,9 @@ function MobileAppFrame(props: MobileRootProps & { readonly controller: MobileLa
   const sessionTitlesRef = useRef<Record<string, string>>({})
   sessionTitlesRef.current = Object.fromEntries(JSON.parse(sessionTitlesJson) as [string, string][])
   useEffect(() => {
-    if (!('Notification' in window) || typeof window.fetch !== 'function') return
-    let disposed = false
-    let cursor = 0
-    try { cursor = Number(window.localStorage.getItem(NOTIFY_CURSOR_KEY) ?? 0) || 0 } catch { cursor = 0 }
-    const shown = new Set<string>()
-    // Inside the Android app the WebView has no Web Notification API, so the
-    // page hands events to the shell over the existing bridge and the shell
-    // raises a real system notification (#46). Browsers keep the fallback.
-    const nativeBridge = (window as unknown as { __DSH_MOBILE_NATIVE__?: { invoke(action: string, input?: unknown): Promise<unknown> } }).__DSH_MOBILE_NATIVE__
-    const canNativeNotify = nativeBridge !== undefined
-    const requestPermission = (): void => {
-      if (canNativeNotify || Notification.permission !== 'default') return
-      void Notification.requestPermission().catch(() => undefined)
-    }
-    window.addEventListener('pointerdown', requestPermission, { once: true })
-    if (canNativeNotify) {
-      // Ask for the Android 13 runtime permission up front, not on the first
-      // event: events are TTL'd and WebView timers throttle in the background,
-      // so waiting would often mean never asking.
-      nativeBridge!.invoke('notify.ensure').catch(() => undefined)
-    }
-    const poll = async (): Promise<void> => {
-      let events: NotifyPollEvent[] = []
-      try {
-        const response = await window.fetch(`/mobile-access/notify/pending?since=${String(cursor)}`)
-        if (!response.ok) return
-        const data: unknown = await response.json()
-        if (typeof data !== 'object' || data === null || !Array.isArray((data as { events?: unknown }).events)) return
-        events = (data as { events: NotifyPollEvent[] }).events.filter(entry =>
-          typeof entry === 'object' && entry !== null
-          && typeof entry.id === 'string' && typeof entry.sessionId === 'string'
-          && typeof entry.time === 'number')
-      } catch { return }
-      if (disposed) return
-      for (const event of events) {
-        if (event.time > cursor) cursor = event.time
-        if (shown.has(event.id)) continue
-        shown.add(event.id)
-        if (document.hidden) {
-          const title = sessionTitlesRef.current[event.sessionId] ?? messages.notifyUntitledSession
-          const body = event.kind === 'failed'
-            ? typeof event.message === 'string' && event.message !== ''
-              ? messages.notifyFailedDetail.replace('{message}', event.message)
-              : messages.notifyFailed
-            : event.kind === 'approval' ? messages.notifyApproval : messages.notifyDone
-          if (canNativeNotify) {
-            nativeBridge!.invoke('notify.show', {
-              title,
-              body,
-              tag: event.id,
-              sessionId: event.sessionId,
-            }).catch(() => undefined)
-          } else if (Notification.permission === 'granted') {
-            const notification = new Notification(title, { body, tag: event.id })
-            notification.onclick = (): void => { window.focus(); notification.close() }
-          }
-        }
-      }
-      try { window.localStorage.setItem(NOTIFY_CURSOR_KEY, String(cursor)) } catch { /* private mode */ }
-    }
-    void poll()
-    const timer = window.setInterval(() => { void poll() }, NOTIFY_POLL_MS)
-    return () => { disposed = true; window.clearInterval(timer); window.removeEventListener('pointerdown', requestPermission) }
+    const notifier = new TaskNotifier(messages)
+    notifier.setTitleResolver(sessionId => sessionTitlesRef.current[sessionId])
+    return notifier.start()
   }, [messages])
 
   // Mirror the stock layout: project the current session title into the
