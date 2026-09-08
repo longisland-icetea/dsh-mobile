@@ -31,7 +31,7 @@ function sourceFixture(version = '0.1.2-alpha.2', architecture: 'renderer-v2' | 
   sources['packages/api/gateway/package.json'] = manifest(version, ['@deepseek-ai/dsh-typert-registry', connection])
   sources['packages/client/ui-layout/src/client/index.ts'] = [
     "'sidebar': { kind: 'single', scope: 'root' }", "'conversation': { kind: 'single', scope: 'session-maybe' }",
-    "'details': { kind: 'single', scope: 'session' }", "'shell.overlay': { kind: 'list', scope: 'root' }", "ctx.reflect.provide('layout'",
+    "'rightbar': { kind: 'single', scope: 'session' }", "'shell.overlay': { kind: 'list', scope: 'root' }", "ctx.reflect.provide('layout'",
   ].join('\n')
   sources['packages/client/ui-conversation/src/client/skeleton/ConversationRoot.tsx'] = 'data-conversation-scroll'
   sources['packages/client/ui-conversation/src/client/skeleton/InputBar.tsx'] = 'data-composer-card data-input-scroll aria-haspopup="listbox"'

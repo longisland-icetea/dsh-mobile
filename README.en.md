@@ -19,14 +19,14 @@
 
 > DSH Mobile is a DeepSeek Harness community plugin; the native app supports Android only.
 >
-> **0.3.12 update**: remote notification limits documented (#46, docs only, no code change). [Details](CHANGELOG.md).
+> **0.3.13 update**: interception-driven, plugin-agnostic WebSocket approval — grouped blocked paths, dual red badges, manual entry under an advanced disclosure (#47) — plus panel polish (FRP step numbering, deploy-notes layout, approval button) and adaptation to DeepSeek Harness 0.1.3-alpha.2 (layout right-bar slot rename). [Details](CHANGELOG.md).
 >
-> **Upgrade reminder**: Windows DSH Desktop users should update to plugin 0.3.12. Existing 0.3.3-0.3.11 apps and paired devices remain compatible without re-pairing. [Compatibility notes](#compatibility).
+> **Upgrade reminder**: check your desktop DeepSeek Harness version before updating the plugin — **0.1.3-alpha.2 or later** pairs with plugin **0.3.13**; on an earlier desktop (0.1.2 line or 0.1.3-alpha.1) stay on plugin **0.3.12**. Existing 0.3.3-0.3.12 apps and paired devices remain compatible without re-pairing. [Compatibility notes](#compatibility).
 
 <p align="center">
-  <a href="https://github.com/saya-ch/dsh-mobile/releases/download/v0.3.12/dsh-mobile-android-v0.3.12.apk"><img src="assets/brand/app-icon-rounded.svg" alt="DSH Mobile Android app icon" width="72" height="72"></a><br>
-  <a href="https://github.com/saya-ch/dsh-mobile/releases/download/v0.3.12/dsh-mobile-android-v0.3.12.apk"><strong>Download Android app 0.3.12</strong></a><br>
-  <sub><a href="https://github.com/saya-ch/dsh-mobile/releases/tag/v0.3.12">Release notes and checksums</a></sub>
+  <a href="https://github.com/saya-ch/dsh-mobile/releases/download/v0.3.13/dsh-mobile-android-v0.3.13.apk"><img src="assets/brand/app-icon-rounded.svg" alt="DSH Mobile Android app icon" width="72" height="72"></a><br>
+  <a href="https://github.com/saya-ch/dsh-mobile/releases/download/v0.3.13/dsh-mobile-android-v0.3.13.apk"><strong>Download Android app 0.3.13</strong></a><br>
+  <sub><a href="https://github.com/saya-ch/dsh-mobile/releases/tag/v0.3.13">Release notes and checksums</a></sub>
 </p>
 
 DSH Mobile is a DeepSeek Harness plugin that lets a mobile browser or the Android app connect over a protected LAN or an optional Tailscale Funnel, cpolar, or self-hosted FRP remote path. Local and remote access keep the same sessions, Workspaces, messages, and tools while using separate switches and paired-device stores without modifying DeepSeek Harness source.
@@ -43,6 +43,7 @@ It also lets you customize the phone from a DSH conversation: `/mobile <what you
 - **Image attachments**: use the top row of the composer plus menu to select an image or take a photo; PNG, JPEG, WebP, and GIF files up to 8 MiB are supported, plus full-resolution JPEG capture.
 - **Auto-discovery, no re-pairing**: Wi-Fi, hotspot, or IP changes normally recover automatically.
 - **One-click connection diagnostics**: check versions, gateway, network interface, firewall, and the remote path; stable reason codes are localized in the UI, and the copied report excludes credentials and complete addresses.
+- **One-click approval for third-party plugin WebSockets**: the diagnostics view groups blocked plugin connections by directory (with attempt counts); allowing a path unblocks that exact path while everything unapproved stays blocked, and a red badge marks the sidebar entry until reviewed (#47). If a plugin keeps failing to connect (for example a terminal reporting 1006), first look at the diagnostics view for blocked connections and approve them in one click — manual configuration is usually unnecessary.
 - **Faster reconnection**: trusted connections race during restore, revisioned assets are reused, and mobile boot batches are compressed.
 - **Three pairing options**: scan a QR code, paste a pairing link, or enter a key.
 
@@ -200,14 +201,14 @@ The table below lists, for each plugin version, the DeepSeek Harness version it 
 
 | DSH Mobile plugin | Verified DeepSeek Harness version |
 | --- | --- |
-| `0.3.10`-`0.3.12` | `0.1.3-alpha.1` |
-| `0.3.9` | `0.1.3-alpha.1` |
+| `0.3.13` | `0.1.3-alpha.2` |
+| `0.3.9`-`0.3.12` | `0.1.3-alpha.1` |
 | `0.3.6`-`0.3.8` | `0.1.2-rc.1` |
 | `0.3.4`, `0.3.5` | `0.1.2-alpha.2` |
 | `0.3.0`-`0.3.3` | `0.1.2-alpha.1` |
 | `0.1.4`, `0.2.x` | `0.1.1-rc.2` |
 
-Existing 0.3.3-0.3.11 apps do not need re-pairing. Earlier apps use a different status-bar strategy, so updating both is recommended. App 0.1.3 or earlier requires reinstalling and pairing again.
+Existing 0.3.3-0.3.13 apps do not need re-pairing. Earlier apps use a different status-bar strategy, so updating both is recommended. App 0.1.3 or earlier requires reinstalling and pairing again.
 
 ## Uninstall
 

@@ -3,9 +3,11 @@
 Notable changes to DSH Mobile are recorded here. GitHub Releases remain the source for downloadable packages and complete generated commit notes.
 
 
-## Unreleased
+## 0.3.13 - 2026-09-08
 
-- Surface blocked third-party WebSocket attempts in the remote panel for one-click approval, so admins no longer need to know plugin socket paths by heart.
+- Third-party WebSocket approval is interception-driven and generic: whenever a plugin's WebSocket connection is blocked, the diagnostics view groups the rejected paths by directory with attempt counts and offers per-path or allow-all approval, behind the same local-admin trust as pairing, and both the sidebar entry and the in-panel diagnostics button carry a red badge until reviewed. Manual path entry is tucked under an “advanced” disclosure that most users never need to open (thanks @idoall for reporting #47). Badge changes are announced to screen readers and the disclosure has a visible focus ring.
+- Panel polish: number the FRP VPS deployment group as step 2, restyle its deploy-changes list, align the path input with sibling fields, and auto-expand the VPS group until FRP is configured.
+- Adapted to DeepSeek Harness 0.1.3-alpha.2: the front-end layout contract renamed the right details slot from `details` to `rightbar` and now hands the occupant resolved column geometry; the mobile layout registers and renders the slot under its new name with the real width, viewport, and eligibility values. The mobile page requires a host exposing the `rightbar` seat — 0.1.3-alpha.2 or later.
 
 ## 0.3.12 - 2026-09-07
 

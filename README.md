@@ -26,14 +26,14 @@
 
 > DSH Mobile 是 DeepSeek Harness 社区插件，原生 App 仅支持 Android。
 >
-> **0.3.12 更新**：补充远程通知限制说明（#46，纯文档，无代码改动）。[详细记录](CHANGELOG.md)。
+> **0.3.13 更新**：第三方插件 WebSocket 连接拦截即通用一键放行——按目录分组、红点双入口、手动配置收进高级项（#47）+ 面板修整（FRP 步骤编号、部署说明排版、批准按钮）+ 适配 DeepSeek Harness 0.1.3-alpha.2（布局右栏插槽更名）。[详细记录](CHANGELOG.md)。
 >
-> **升级提醒**：Windows DSH Desktop 用户请更新至插件 0.3.12；现有 0.3.3-0.3.11 App 可继续使用，无需重新配对。[兼容说明](#兼容性)。
+> **升级提醒**：先看电脑端 DeepSeek Harness 版本再升插件——**0.1.3-alpha.2 及以上**用插件 **0.3.13**；电脑端为更早版本（0.1.2 线或 0.1.3-alpha.1）时请保持插件 **0.3.12**。现有 0.3.3-0.3.12 App 可继续使用，无需重新配对。[兼容说明](#兼容性)。
 
 <p align="center">
-  <a href="https://github.com/saya-ch/dsh-mobile/releases/download/v0.3.12/dsh-mobile-android-v0.3.12.apk"><img src="assets/brand/app-icon-rounded.svg" alt="DSH Mobile 安卓应用图标" width="72" height="72"></a><br>
-  <a href="https://github.com/saya-ch/dsh-mobile/releases/download/v0.3.12/dsh-mobile-android-v0.3.12.apk"><strong>下载 Android App 0.3.12</strong></a><br>
-  <sub><a href="https://github.com/saya-ch/dsh-mobile/releases/tag/v0.3.12">版本说明与校验文件</a></sub>
+  <a href="https://github.com/saya-ch/dsh-mobile/releases/download/v0.3.13/dsh-mobile-android-v0.3.13.apk"><img src="assets/brand/app-icon-rounded.svg" alt="DSH Mobile 安卓应用图标" width="72" height="72"></a><br>
+  <a href="https://github.com/saya-ch/dsh-mobile/releases/download/v0.3.13/dsh-mobile-android-v0.3.13.apk"><strong>下载 Android App 0.3.13</strong></a><br>
+  <sub><a href="https://github.com/saya-ch/dsh-mobile/releases/tag/v0.3.13">版本说明与校验文件</a></sub>
 </p>
 
 DSH Mobile 是一个 DeepSeek Harness 插件，让手机浏览器或 Android App 通过局域网，或可选的 Tailscale Funnel、cpolar、自建 FRP 远程通道连接电脑，继续使用同一份会话、工作区、消息和工具。局域网与远程访问分别启停、分别管理设备，且都不修改 DeepSeek Harness 源码。
@@ -50,6 +50,7 @@ DSH Mobile 是一个 DeepSeek Harness 插件，让手机浏览器或 Android App
 - **图片附件**：在已打开会话的输入栏加号菜单顶部选择图片或拍照；支持 PNG、JPEG、WebP、GIF（不超过 8 MiB）和完整分辨率 JPEG。
 - **自动发现、无需重新配对**：切换 Wi-Fi、热点或 IP 后通常自动恢复。
 - **一键连接诊断**：检查版本、网关、网卡、防火墙和远程通道；稳定的原因码在界面中本地化，并生成不含凭据与完整地址的脱敏报告。
+- **第三方插件 WebSocket 一键放行**：诊断页按目录分组记录被拦截的插件连接（含次数），点允许即放行确切路径，未批准的一律拦截；有新拦截时侧栏红点提醒（#47）。若某插件的连接一直失败（如终端报 1006），先到诊断页看看有没有被拦的连接，一键放行即可，通常无需手动配置。
 - **更快恢复连接**：远程重开会并行恢复可信连接、复用版本化资源，并压缩移动端启动批次。
 - **三种配对方式**：扫码、配对链接、密钥。
 
@@ -209,14 +210,14 @@ flowchart LR
 
 | DSH Mobile 插件 | 验证支持的 DeepSeek Harness 版本 |
 | --- | --- |
-| `0.3.10`-`0.3.12` | `0.1.3-alpha.1` |
-| `0.3.9` | `0.1.3-alpha.1` |
+| `0.3.13` | `0.1.3-alpha.2` |
+| `0.3.9`-`0.3.12` | `0.1.3-alpha.1` |
 | `0.3.6`-`0.3.8` | `0.1.2-rc.1` |
 | `0.3.4`、`0.3.5` | `0.1.2-alpha.2` |
 | `0.3.0`-`0.3.3` | `0.1.2-alpha.1` |
 | `0.1.4`、`0.2.x` | `0.1.1-rc.2` |
 
-现有 0.3.3-0.3.11 App 无需重新配对；更早的 App 使用不同的状态栏策略，建议同步升级；App 0.1.3 及更早版本需卸载重装并重新配对。
+现有 0.3.3-0.3.13 App 无需重新配对；更早的 App 使用不同的状态栏策略，建议同步升级；App 0.1.3 及更早版本需卸载重装并重新配对。
 
 ## 卸载
 
