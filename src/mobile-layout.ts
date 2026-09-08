@@ -251,8 +251,14 @@ function MobileAppFrame(props: MobileRootProps & { readonly controller: MobileLa
     let cursor = 0
     try { cursor = Number(window.localStorage.getItem(NOTIFY_CURSOR_KEY) ?? 0) || 0 } catch { cursor = 0 }
     const shown = new Set<string>()
+    // Inside the Android app the WebView has no Web Notification API, so the
+    // page hands events to the shell over the existing bridge and the shell
+    // raises a real system notification (#46). Browsers keep the fallback.
+    const nativeBridge = (window as unknown as { __DSH_MOBILE_NATIVE__?: { invoke(action: string, input?: unknown): Promise<unknown> } }).__DSH_MOBILE_NATIVE__
+    const canNativeNotify = nativeBridge !== undefined
     const requestPermission = (): void => {
-      if (Notification.permission === 'default') void Notification.requestPermission().catch(() => undefined)
+      if (canNativeNotify || Notification.permission !== 'default') return
+      void Notification.requestPermission().catch(() => undefined)
     }
     window.addEventListener('pointerdown', requestPermission, { once: true })
     const poll = async (): Promise<void> => {
@@ -272,15 +278,24 @@ function MobileAppFrame(props: MobileRootProps & { readonly controller: MobileLa
         if (event.time > cursor) cursor = event.time
         if (shown.has(event.id)) continue
         shown.add(event.id)
-        if (document.hidden && Notification.permission === 'granted') {
+        if (document.hidden) {
           const title = sessionTitlesRef.current[event.sessionId] ?? messages.notifyUntitledSession
           const body = event.kind === 'failed'
             ? typeof event.message === 'string' && event.message !== ''
               ? messages.notifyFailedDetail.replace('{message}', event.message)
               : messages.notifyFailed
             : event.kind === 'approval' ? messages.notifyApproval : messages.notifyDone
-          const notification = new Notification(title, { body, tag: event.id })
-          notification.onclick = (): void => { window.focus(); notification.close() }
+          if (canNativeNotify) {
+            nativeBridge!.invoke('notify.show', {
+              title,
+              body,
+              tag: event.id,
+              sessionId: event.sessionId,
+            }).catch(() => undefined)
+          } else if (Notification.permission === 'granted') {
+            const notification = new Notification(title, { body, tag: event.id })
+            notification.onclick = (): void => { window.focus(); notification.close() }
+          }
         }
       }
       try { window.localStorage.setItem(NOTIFY_CURSOR_KEY, String(cursor)) } catch { /* private mode */ }

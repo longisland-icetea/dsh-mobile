@@ -69,6 +69,8 @@ internal class NativeBridge(
         val deadlineMillis: Long,
     )
 
+    @Volatile private var pendingNotification: Notifications.Payload? = null
+
     private data class TimedOutOperation(
         val pending: Pending?,
         val cameraFile: File?,
@@ -393,6 +395,31 @@ internal class NativeBridge(
                 }
                 "clipboard.read" -> startClipboardRead(requestId)
                 "clipboard.write" -> startClipboardWrite(requestId, input.optString("text", ""))
+                "notify.show" -> {
+                    val title = input.optString("title", "")
+                    val tag = input.optString("tag", "")
+                    val payload = Notifications.Payload(
+                        title = title,
+                        body = input.optString("body", ""),
+                        tag = tag,
+                        sessionId = input.optString("sessionId", ""),
+                    )
+                    activity.runOnUiThread {
+                        if (title.isBlank() || tag.isBlank()) {
+                            finishPending(requestId, errorJson("bad_message", "notify.show needs title and tag", requestId))
+                            return@runOnUiThread
+                        }
+                        if (installed) {
+                            pendingNotification = payload
+                            if (Notifications.permissionGranted(activity)) {
+                                Notifications.post(activity.applicationContext, payload)
+                            } else {
+                                Notifications.requestPermission(activity)
+                            }
+                        }
+                        finishPending(requestId, successJson(requestId, JSONObject().put("ok", true)))
+                    }
+                }
                 else -> finishPending(requestId, errorJson("unsupported", "native capability is unavailable", requestId))
             }
         } catch (_: Exception) {
@@ -418,6 +445,14 @@ internal class NativeBridge(
                 }
             }
         }
+    }
+
+    /** Replay the most recent page notification once notification permission lands. */
+    fun onNotificationPermissionGranted(granted: Boolean) {
+        val payload = pendingNotification
+        if (!granted || payload == null || !Notifications.permissionGranted(activity)) return
+        pendingNotification = null
+        activity.runOnUiThread { Notifications.post(activity.applicationContext, payload) }
     }
 
     private fun startActivityPending(requestId: String, action: String, launch: () -> Unit) {

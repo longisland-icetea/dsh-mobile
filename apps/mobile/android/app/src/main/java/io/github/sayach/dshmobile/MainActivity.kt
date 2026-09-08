@@ -996,6 +996,12 @@ class MainActivity : Activity() {
             deferredBridgePermission = grantResults.copyOf()
             return
         }
+        if (requestCode == Notifications.NOTIFICATION_PERMISSION_REQUEST) {
+            nativeBridge?.onNotificationPermissionGranted(
+                grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED,
+            )
+            return
+        }
         when (requestCode) {
             NEARBY_WIFI_REQUEST -> {
                 val retry = pendingScan

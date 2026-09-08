@@ -8,7 +8,7 @@ Notable changes to DSH Mobile are recorded here. GitHub Releases remain the sour
 - Approve third-party plugin WebSocket paths with one click from the diagnostics view: blocked attempts are recorded with per-path counters and exact-path allow/revoke, behind the same local-admin trust as pairing (thanks @idoall for reporting #47).
 - Panel polish: number the FRP VPS deployment group as step 2, restyle its deploy-changes list, turn the path approval into a blue primary button, align the input with sibling fields, and auto-expand the VPS group until FRP is configured.
 - Group blocked WebSocket paths by parent directory with allow-all, and badge the sidebar entry with a red count until diagnostics is visited.
-- Phone-page task notifications (#46, in-page half): the host records task completions, failures, and approval requests with dsh-messager semantics and serves them to paired devices; the mobile page polls and pops a system notification while hidden. Native app push stays out of scope.
+- Phone-page task notifications (#46): the host records task completions (per-turn tool calls), failures, and approval requests with dsh-messager semantics and serves them to paired devices; the mobile page polls while hidden. In browsers a system notification pops; inside the Android app the page hands the event to the shell over the existing WebMessage bridge and the shell raises a real system notification (channel + Android 13 runtime permission).
 
 ## 0.3.12 - 2026-09-07
 
