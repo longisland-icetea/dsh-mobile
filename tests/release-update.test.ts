@@ -41,6 +41,25 @@ function releaseFetch(version: string): typeof globalThis.fetch {
   }) as unknown as typeof globalThis.fetch
 }
 
+function notesFetch(version: string): typeof globalThis.fetch {
+  return vi.fn(async input => {
+    const url = String(input)
+    if (url.includes('registry.npmjs.org')) {
+      return new Response(JSON.stringify({ version }), { status: 200, headers: { 'content-type': 'application/json' } })
+    }
+    if (url.includes('api.github.com')) {
+      return new Response(JSON.stringify({ body: '## 0.3.3 updates: fixes things. Restart DSH after installing.' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
+    return new Response('', {
+      status: 302,
+      headers: { location: `https://github.com/saya-ch/dsh-mobile/releases/tag/v${version}` },
+    })
+  }) as unknown as typeof globalThis.fetch
+}
+
 describe('profile-local release updates', () => {
   it('compares stable and prerelease SemVer values', () => {
     expect(comparePluginVersions('0.3.3', '0.3.2')).toBe(1)
@@ -97,6 +116,30 @@ describe('profile-local release updates', () => {
     })
     await expect(manager.update()).resolves.toEqual({ installedVersion: '0.3.3', restartRequired: true })
     expect(runUpdate).toHaveBeenCalledWith(directory, '0.3.3')
+  })
+
+  it('carries the latest release notes for the preview card and degrades when the API fails', async () => {
+    const directory = await profileDirectory('^0.3.2')
+    const manager = new PluginReleaseManager({
+      profileDirectory: directory,
+      installedVersion: '0.3.2',
+      fetch: notesFetch('0.3.3'),
+      runUpdate: async () => {},
+    })
+    await expect(manager.status()).resolves.toMatchObject({
+      latestVersion: '0.3.3',
+      updateAvailable: true,
+      releaseNotes: '## 0.3.3 updates: fixes things. Restart DSH after installing.',
+    })
+    const failing = new PluginReleaseManager({
+      profileDirectory: directory,
+      installedVersion: '0.3.2',
+      fetch: releaseFetch('0.3.3'),
+      runUpdate: async () => {},
+    })
+    const failingStatus = await failing.status()
+    expect(failingStatus.updateAvailable).toBe(true)
+    expect(failingStatus.releaseNotes).toBeUndefined()
   })
 
   it('uses the launcher-selected Desktop directory instead of the CLI Web profile', async () => {

@@ -19,7 +19,7 @@
 
 > DSH Mobile is a DeepSeek Harness community plugin; the native app supports Android only.
 >
-> **0.3.14 update**: a 0.3.13 layout regression is fixed — the mobile right panel (details) now adapts to both the published 0.1.3-alpha.2 and the newer development contract, rendering on either host. Everything 0.3.13 brought stays (interception-driven WebSocket approval #47, panel polish, screen-reader announcements). [Details](CHANGELOG.md).
+> **0.3.14 update**: the 0.3.13 layout regression is fixed (right panel renders on both the published and the newer host contract), and the panel's “Update plugin” action now shows the latest release notes and upgrade notices before updating. Everything 0.3.13 brought stays (interception-driven WebSocket approval #47, panel polish, screen-reader announcements). [Details](CHANGELOG.md).
 >
 > **Upgrade reminder**: plugin **0.3.14** is recommended and works on every 0.1.3 desktop release (alpha.1 included). Restart DSH after installing a new plugin. Existing 0.3.3-0.3.13 apps and paired devices remain compatible without re-pairing. [Compatibility notes](#compatibility).
 
