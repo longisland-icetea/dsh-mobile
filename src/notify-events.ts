@@ -10,7 +10,6 @@ export interface NotifyEvent {
   readonly message?: string
 }
 
-export const MAX_NOTIFY_EVENTS = 32
 export const NOTIFY_EVENT_TTL_MS = 10 * 60 * 1000
 
 /**
@@ -45,7 +44,6 @@ export class NotifyEventLog {
     }
     this.prune(time)
     this.events.push(event)
-    while (this.events.length > MAX_NOTIFY_EVENTS) this.events.shift()
     return event
   }
 

@@ -56,7 +56,7 @@ describe('NotifyEventLog turn semantics', () => {
     expect(log.since(0)).toHaveLength(0)
   })
 
-  it('filters by since cursor, prunes past TTL, caps at 32', () => {
+  it('filters by since cursor and prunes past the TTL', () => {
     const log = new NotifyEventLog()
     log.onTurnEvent('a', 'approval/asked', true)
     log.onTurnEvent('b', 'approval/asked', true)
@@ -66,7 +66,7 @@ describe('NotifyEventLog turn semantics', () => {
     for (const entry of events) entry.time -= 11 * 60 * 1000
     expect(log.since(0)).toHaveLength(0)
     for (let index = 0; index < 40; index += 1) log.onTurnEvent(`s${index}`, 'approval/asked', true)
-    expect(log.since(0)).toHaveLength(32)
+    expect(log.since(0)).toHaveLength(40)
   })
 })
 

@@ -1289,7 +1289,7 @@ export class MobileAccessGateway {
     }
     if (isMutation) this.requireCsrf(request, authorization)
     if (request.method === 'GET' && target.decodedPathname === `${AUTH_PREFIX}/notify/pending`) {
-      const since = Number(new URL(target.raw, 'http://gateway.invalid').searchParams.get('since') ?? 0)
+      const since = Number(new URL(target.raw, this.address().origin).searchParams.get('since') ?? 0)
       sendJson(response, 200, {
         events: this.notifyEvents?.since(Number.isFinite(since) && since > 0 ? since : 0) ?? [],
       }, this.tlsEnabled)
