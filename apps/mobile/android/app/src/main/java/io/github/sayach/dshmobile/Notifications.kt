@@ -16,6 +16,10 @@ import androidx.core.content.ContextCompat
  * Task notifications for #46. The WebView cannot use the Web Notification
  * API (platform limitation), so the page posts {event:'notify.show'} over the
  * existing WebMessage bridge and the shell raises a real system notification.
+ *
+ * Tapping a notification wakes the app task (launchMode=singleTask) and
+ * brings the already-running page forward; SESSION_ID_EXTRA is carried on the
+ * tap intent for a future deep link into that session and is not yet routed.
  */
 internal object Notifications {
     const val CHANNEL_ID = "dsh-mobile-tasks"

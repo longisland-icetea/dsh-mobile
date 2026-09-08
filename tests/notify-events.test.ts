@@ -56,6 +56,19 @@ describe('NotifyEventLog turn semantics', () => {
     expect(log.since(0)).toHaveLength(0)
   })
 
+  it('drops the per-session counter when a turn settles', () => {
+    const log = new NotifyEventLog()
+    log.onTurnEvent('s1', 'turn/start', true)
+    for (let index = 0; index < 7; index += 1) log.onTurnEvent('s1', 'tool/call', true)
+    log.onTurnEvent('s1', 'turn/end', true, 'completed')
+    expect(log.since(0).map(e => e.kind)).toEqual(['done'])
+    // The settled turn must not leak its counter: a short follow-up turn in
+    // the same session (0 tool calls) stays silent instead of inheriting 7.
+    log.onTurnEvent('s1', 'turn/start', true)
+    log.onTurnEvent('s1', 'turn/end', true, 'completed')
+    expect(log.since(0).map(e => e.kind)).toEqual(['done'])
+  })
+
   it('filters by since cursor and prunes past the TTL', () => {
     const log = new NotifyEventLog()
     log.onTurnEvent('a', 'approval/asked', true)

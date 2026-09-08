@@ -55,17 +55,20 @@ export const writeCursor = (cursor: number): void => {
 
 export class TaskNotifier {
   private readonly messages: TaskNotifierMessages
-  private readonly browserSupported: boolean
-  private readonly bridge: NativeBridge | undefined
+  private readonly supportsNotify: boolean
   private cursor = 0
   private readonly shown = new Set<string>()
   private resolveTitle: ((sessionId: string) => string | undefined) | undefined
+  private ensureIssued = false
 
   constructor(messages: TaskNotifierMessages) {
     this.messages = messages
-    this.browserSupported = typeof window !== 'undefined' && 'Notification' in window && typeof window.fetch === 'function'
-    const native = (window as unknown as { __DSH_MOBILE_NATIVE__?: NativeBridge }).__DSH_MOBILE_NATIVE__
-    this.bridge = native
+    // The Android shell counts as a delivery path even though its WebView has
+    // no Web Notification API: the page polls and hands events to the shell
+    // over __DSH_MOBILE_NATIVE__. The bridge is read lazily (never cached) so
+    // a shell that injects it after the page booted is still picked up.
+    this.supportsNotify = typeof window !== 'undefined' && typeof window.fetch === 'function'
+      && (readNativeBridge() !== undefined || 'Notification' in window)
   }
 
   /** Prefer a session display name over the generic untitled fallback. */
@@ -75,21 +78,16 @@ export class TaskNotifier {
 
   /** Begin polling; returns a dispose that stops the loop and listeners. */
   start(): () => void {
-    if (!this.browserSupported) return () => undefined
+    if (!this.supportsNotify) return () => undefined
     this.cursor = readCursor()
     const requestPermission = (): void => {
-      if (this.bridge !== undefined || Notification.permission !== 'default') return
+      if (readNativeBridge() !== undefined || Notification.permission !== 'default') return
       void Notification.requestPermission().catch(() => undefined)
     }
     // Browsers only allow the permission prompt from a user gesture; asking
     // on the first tap anywhere on the page is the least intrusive moment.
     window.addEventListener('pointerdown', requestPermission, { once: true })
-    if (this.bridge !== undefined) {
-      // Ask for the Android 13 runtime permission up front rather than on the
-      // first event: events are TTL'd and WebView timers throttle in the
-      // background, so waiting would often mean never asking.
-      this.bridge.invoke('notify.ensure').catch(() => undefined)
-    }
+    this.ensureNativePermission()
     void this.poll()
     const timer = window.setInterval(() => { void this.poll() }, NOTIFY_POLL_MS)
     return () => {
@@ -98,7 +96,19 @@ export class TaskNotifier {
     }
   }
 
+  private ensureNativePermission(): void {
+    if (this.ensureIssued) return
+    const bridge = readNativeBridge()
+    if (bridge === undefined) return
+    this.ensureIssued = true
+    // Ask for the Android 13 runtime permission up front rather than on the
+    // first event: events are TTL'd and WebView timers throttle in the
+    // background, so waiting would often mean never asking.
+    bridge.invoke('notify.ensure').catch(() => undefined)
+  }
+
   private async poll(): Promise<void> {
+    this.ensureNativePermission()
     let events: FeedEvent[] = []
     try {
       const response = await window.fetch(`${NOTIFY_PENDING_PATH}?since=${String(this.cursor)}`)
@@ -121,6 +131,7 @@ export class TaskNotifier {
   }
 
   private show(event: FeedEvent): void {
+    const bridge = readNativeBridge()
     const title = this.resolveTitle?.(event.sessionId) ?? this.messages.notifyUntitledSession
     let body: string
     if (event.kind === 'failed') {
@@ -130,8 +141,8 @@ export class TaskNotifier {
     } else {
       body = event.kind === 'approval' ? this.messages.notifyApproval : this.messages.notifyDone
     }
-    if (this.bridge !== undefined) {
-      this.bridge.invoke('notify.show', { title, body, tag: event.id, sessionId: event.sessionId }).catch(() => undefined)
+    if (bridge !== undefined) {
+      bridge.invoke('notify.show', { title, body, tag: event.id, sessionId: event.sessionId }).catch(() => undefined)
       return
     }
     if (Notification.permission === 'granted') {
@@ -139,4 +150,11 @@ export class TaskNotifier {
       notification.onclick = (): void => { window.focus(); notification.close() }
     }
   }
+}
+
+/** Read the native bridge lazily so late shell injection is honored. */
+function readNativeBridge(): NativeBridge | undefined {
+  try {
+    return (window as unknown as { __DSH_MOBILE_NATIVE__?: NativeBridge }).__DSH_MOBILE_NATIVE__
+  } catch { return undefined }
 }

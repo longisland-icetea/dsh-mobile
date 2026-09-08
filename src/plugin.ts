@@ -415,6 +415,7 @@ export async function apply(ctx: Context, config: PluginConfig): Promise<void> {
         upstreamLoginUrl,
         webSocketPaths,
         blockedUpgradePaths,
+        notifyEvents,
       )
       await candidate.start()
       return candidate

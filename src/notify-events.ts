@@ -59,6 +59,9 @@ export class NotifyEventLog {
     }
     if (type !== 'turn/end' || !root) return undefined
     const toolCalls = this.turnToolCalls.get(sessionId) ?? 0
+    // The turn is settled: drop the per-session counter so a long-lived host
+    // with many sessions never grows this map without bound.
+    this.turnToolCalls.delete(sessionId)
     if (reasonKind === 'error') return this.record('failed', sessionId, truncateError(error))
     if (reasonKind === 'completed' && toolCalls >= MIN_NOTIFY_TOOL_CALLS) return this.record('done', sessionId)
     return undefined
