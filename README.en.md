@@ -80,7 +80,7 @@ Restart DSH, then search for **dsh-mobile** under **Settings → Plugin Market**
 
 After installation, start DSH and use the connection guide below to choose LAN or remote access.
 
-Registry-installed plugins check for updates when the desktop UI loads and show “Update plugin” beside the access-panel title when a newer release is available. Restart DSH after installation. The app download entry shows the latest version; local development packages are not overwritten, and Android does not send update notifications.
+Registry-installed plugins check for updates when the desktop UI loads and show “Update plugin” beside the access-panel title when a newer release is available. Restart DSH after installation. The app download entry shows the latest version; local development packages are not overwritten, and Android does not send update notifications. Check your desktop DeepSeek Harness version before updating: **dsh-mobile 0.3.13 pairs with desktop 0.1.3-alpha.2 or later**; if the desktop is still on an earlier release (0.1.2 line or 0.1.3-alpha.1), keep dsh-mobile 0.3.12. Upgrade the plugin right after upgrading the desktop; if the phone page misbehaves after a plugin update, verify the desktop version first.
 
 ## Connection guide
 
