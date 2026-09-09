@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Config, parseGatewayConfig } from '../src/config.js'
 import { parseCidr, RequestTrustPolicy } from '../src/network.js'
-import { apply, inject, remoteGatewayConfig, settleCleanupSteps } from '../src/plugin.js'
+import { apply, inject, remoteGatewayConfig, settleCleanupSteps, upstreamAuthenticatedUrl } from '../src/plugin.js'
 import { DSH_MOBILE_VERSION, MINIMUM_ANDROID_APP_VERSION } from '../src/version.js'
 
 const contexts: Context[] = []
@@ -97,6 +97,48 @@ async function mount(initiallyEnabled = false, webServerPort = 3080): Promise<{ 
   if (command === undefined) throw new Error('plugin did not register its /mobile command')
   return { context, route, command, upstreamBase }
 }
+
+describe('upstream browser authentication', () => {
+  const upstreamOrigin = new URL('http://127.0.0.1:3080')
+  const withConnection = (connection: unknown): Context => ({ connection } as unknown as Context)
+
+  it('keeps the launch-token URL a stock DSH connection returns', () => {
+    const authenticatedUrl = upstreamAuthenticatedUrl(withConnection({
+      authenticatedUrl: (baseUrl: string) => `${baseUrl}/?token=launch-token`,
+    }), upstreamOrigin)
+    expect(authenticatedUrl).toBe('http://127.0.0.1:3080/?token=launch-token')
+  })
+
+  it('reports no upstream URL when browser authentication is disabled, so the gateway proxies without a cookie', () => {
+    // dsh-lan-access `noAuth: true` replaces `authenticatedUrl` with one that
+    // returns the bare origin. Handing that URL to the gateway made its cookie
+    // exchange reject every proxied route with `upstream_unavailable`.
+    const authenticatedUrl = upstreamAuthenticatedUrl(withConnection({
+      authenticatedUrl: (baseUrl: string) => baseUrl,
+    }), upstreamOrigin)
+    expect(authenticatedUrl).toBeUndefined()
+  })
+
+  it('reports no upstream URL when the connection service exposes no browser authentication', () => {
+    expect(upstreamAuthenticatedUrl(withConnection(undefined), upstreamOrigin)).toBeUndefined()
+    expect(upstreamAuthenticatedUrl(withConnection({}), upstreamOrigin)).toBeUndefined()
+    expect(upstreamAuthenticatedUrl(withConnection({ authenticatedUrl: 'not-a-function' }), upstreamOrigin)).toBeUndefined()
+  })
+
+  it('reports no upstream URL when the connection service returns a malformed URL', () => {
+    expect(upstreamAuthenticatedUrl(withConnection({
+      authenticatedUrl: () => 'not a url',
+    }), upstreamOrigin)).toBeUndefined()
+  })
+
+  it('does not swallow a failing connection service', () => {
+    // Only parsing the returned URL is guarded. A broken connection service must
+    // keep failing plugin activation instead of silently proxying unauthenticated.
+    expect(() => upstreamAuthenticatedUrl(withConnection({
+      authenticatedUrl: () => { throw new Error('connection unavailable') },
+    }), upstreamOrigin)).toThrow('connection unavailable')
+  })
+})
 
 describe('remote Funnel gateway configuration', () => {
   it('keeps public HTTPS on 443 when the private listener uses an ephemeral port', () => {

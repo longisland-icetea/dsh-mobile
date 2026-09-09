@@ -76,11 +76,28 @@ interface BrowserAuthenticatedConnection {
   authenticatedUrl?: (baseUrl: string) => string
 }
 
-function upstreamAuthenticatedUrl(ctx: Context, upstreamOrigin: URL): string | undefined {
+/**
+ * Resolve the DSH launch-token URL the gateway exchanges for its upstream cookie.
+ *
+ * A layer that disables DSH browser authentication — dsh-lan-access with
+ * `noAuth: true` replaces `authenticatedUrl` with one returning the bare origin
+ * — produces a URL with no query string, so it cannot carry a launch token. That
+ * is a legitimate "this upstream needs no browser auth" signal: report no URL and
+ * the gateway proxies without a cookie instead of failing every route with
+ * `upstream_unavailable`. A token-bearing URL keeps the existing exchange, and a
+ * connection service that is absent or returns a malformed URL keeps failing
+ * closed. Only parsing is guarded: a connection service that throws still fails
+ * plugin activation loudly rather than silently proxying without authentication.
+ */
+export function upstreamAuthenticatedUrl(ctx: Context, upstreamOrigin: URL): string | undefined {
   const connection = (ctx as Context & { readonly connection?: BrowserAuthenticatedConnection }).connection
-  return typeof connection?.authenticatedUrl === 'function'
-    ? connection.authenticatedUrl(upstreamOrigin.origin)
-    : undefined
+  if (typeof connection?.authenticatedUrl !== 'function') return undefined
+  const authenticatedUrl = connection.authenticatedUrl(upstreamOrigin.origin)
+  try {
+    return new URL(authenticatedUrl).search === '' ? undefined : authenticatedUrl
+  } catch {
+    return undefined
+  }
 }
 
 function installedDshVersion(): string {
