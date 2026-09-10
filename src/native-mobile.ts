@@ -1,6 +1,23 @@
+/**
+ * Viewport below which the injected chrome becomes an overlay drawer: the
+ * sidebar slides in as a sheet, the right panel as a drawer, and the scrim dims
+ * the page behind them. The stylesheet and the scrim's visibility both read
+ * this query, so a wider viewport never grows drawer chrome whose rules cannot
+ * style it.
+ */
+export const NATIVE_MOBILE_OVERLAY_QUERY = '(max-width:720px)'
+
 /** Mobile feature and compatibility rules applied to DSH React surfaces. */
 export const NATIVE_MOBILE_STYLES = `
-@media (max-width:720px) {
+/* The surface appends chrome to <body> on every non-loopback page load, but
+   every rule that gives that chrome a box lives inside the overlay query
+   below. Outside the query the scrim kept the UA button box: an empty,
+   nameless button in normal flow at the document's bottom-left, whose click
+   still collapsed the sidebar. Keep the neutral state explicitly invisible —
+   the query restores the fixed scrim, and its more specific [hidden] rule
+   keeps winning there. */
+.dsh-native-mobile-backdrop { display:none; }
+@media ${NATIVE_MOBILE_OVERLAY_QUERY} {
   html.dsh-native-mobile-active,html.dsh-native-mobile-active body { width:100%; height:100%; overflow:hidden; }
   html.dsh-native-mobile-active { --dsh-mobile-motion-duration:200ms; --dsh-mobile-motion-ease:cubic-bezier(.22,1,.36,1); }
   html.dsh-native-mobile-active :is(a,button,[role="button"],[role="tab"],[tabindex]) { -webkit-tap-highlight-color:transparent; }
@@ -45,7 +62,7 @@ export const NATIVE_MOBILE_STYLES = `
   [data-dsh-mobile-sidebar][data-open="false"] [data-dsh-mobile-sidebar-root] > :has([data-dsh-mobile-toggle]) > :not([data-dsh-mobile-toggle]) { display:none !important; }
   [data-dsh-mobile-toggle] { width:44px !important; height:44px !important; min-width:44px !important; min-height:44px !important; }
   [data-dsh-mobile-sidebar][data-open="false"] [data-dsh-mobile-toggle] > svg[class*="_railFish"] { transform:translateY(-4px) !important; }
-  .dsh-native-mobile-backdrop { position:fixed; z-index:235; inset:env(safe-area-inset-top) 0 0; border:0; background:rgb(15 23 42 / 32%); }
+  .dsh-native-mobile-backdrop { display:block; position:fixed; z-index:235; inset:env(safe-area-inset-top) 0 0; border:0; background:rgb(15 23 42 / 32%); }
   .dsh-native-mobile-backdrop:not([hidden]) { animation:dsh-mobile-fade-in var(--dsh-mobile-motion-duration) ease-out; }
   .dsh-native-mobile-backdrop[hidden] { display:none; }
   [data-dsh-mobile-details] { position:fixed !important; z-index:250 !important; inset:0 0 0 auto !important; width:min(94vw,460px) !important; max-width:none !important; transform:translateX(100%); transition:transform var(--dsh-mobile-motion-duration) var(--dsh-mobile-motion-ease); background:var(--dsw-bg, #fff); box-shadow:-18px 0 46px rgb(15 23 42 / 18%); }
@@ -262,6 +279,19 @@ export function shouldAutoLoadEarlier(previousTop: number, currentTop: number): 
   return currentTop <= AUTO_HISTORY_THRESHOLD_PX && currentTop < previousTop - 0.5
 }
 
+/**
+ * Whether the overlay scrim belongs on screen. The scrim exists for the
+ * slide-in drawer only — it dims the page and catches the tap that closes the
+ * drawer — so it is shown while that drawer is open *and* the overlay query is
+ * in force. `hidden` carries the whole decision rather than the width rules
+ * alone: the attribute still hides the element when the injected stylesheet
+ * never lands (a CSP without inline styles, a shell that drops the <style>
+ * node), where the element would otherwise fall back to the UA button box.
+ */
+export function drawerScrimVisible(sidebarCollapsed: boolean, overlayActive: boolean): boolean {
+  return !sidebarCollapsed && overlayActive
+}
+
 interface ComposerMediaOrigin {
   readonly generation: number
   readonly href: string
@@ -343,6 +373,10 @@ export function installNativeMobileSurface(): () => void {
   }
   document.addEventListener('pointerdown', onPointerDown, true)
   document.addEventListener('keydown', onKeyDown, true)
+  // The scrim is drawer chrome: it belongs on screen only while the overlay
+  // query matches. A resize crosses that breakpoint without touching the DOM
+  // the observer below watches, so the query wakes the same sync pass itself.
+  const overlayQuery = window.matchMedia(NATIVE_MOBILE_OVERLAY_QUERY)
   const backdrop = document.createElement('button')
   backdrop.type = 'button'
   backdrop.className = 'dsh-native-mobile-backdrop'
@@ -758,11 +792,12 @@ export function installNativeMobileSurface(): () => void {
     if (toggle !== undefined) toggle.dataset.dshMobileToggle = 'true'
     const collapsed = classToken(sidebarRoot, '_collapsed')
     sidebar.dataset.open = String(!collapsed)
-    backdrop.hidden = collapsed
+    backdrop.hidden = !drawerScrimVisible(collapsed, overlayQuery.matches)
   }
   const schedule = (): void => { if (scheduled === 0) scheduled = requestAnimationFrame(sync) }
   const observer = new MutationObserver(schedule)
   observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'disabled', 'readonly', 'aria-busy', 'aria-selected', 'data-dsh-mobile-session'] })
+  overlayQuery.addEventListener('change', schedule)
   backdrop.addEventListener('click', () => { if (sidebar?.dataset.open === 'true') toggle?.click() })
   sync()
   return () => {
@@ -772,6 +807,7 @@ export function installNativeMobileSurface(): () => void {
     restoreLanguageMarker()
     for (const cleanup of [...browserPickerCleanups]) cleanup()
     observer.disconnect()
+    overlayQuery.removeEventListener('change', schedule)
     document.removeEventListener('click', onBranchClick, true)
     fileButton.removeEventListener('pointerdown', quietMediaPointer)
     cameraButton.removeEventListener('pointerdown', quietMediaPointer)
