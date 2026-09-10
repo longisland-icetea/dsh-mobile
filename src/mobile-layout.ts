@@ -100,6 +100,9 @@ class MobileLayoutController {
     panelInfo: Object.freeze({ activePanelId: null }),
   })
   private readonly listeners = new Set<() => void>()
+  // Pending workspace/session navigation, cancelled whenever a newer one
+  // starts. Mirrors the official LayoutController's navigation controller.
+  private navigation = new AbortController()
 
   readonly subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener)
@@ -122,6 +125,25 @@ class MobileLayoutController {
 
   closeSidebar(): void {
     this.update({ sidebarOpen: false })
+  }
+
+  /**
+   * Invalidate the previous navigation and hand back a fresh signal. The
+   * workspace controller wraps this around "open a workspace" and "fork a
+   * session" (dsh-client-ui-workspace) — the path behind the sidebar's
+   * new-session button. Without it startSession throws inside a
+   * `.catch(reason => console.warn('new session failed:', reason))`, so the
+   * button silently did nothing.
+   */
+  beginNavigation(): AbortSignal {
+    this.navigation.abort()
+    this.navigation = new AbortController()
+    return this.navigation.signal
+  }
+
+  /** Invalidate pending navigations when this layout unloads. */
+  dispose(): void {
+    this.navigation.abort()
   }
 
   /**

@@ -396,6 +396,7 @@ describe('dedicated mobile layout boot', () => {
         retainMainPanels: (ids: readonly string[]) => void
         openRightbar: (track?: boolean, fullscreen?: boolean) => void
         closeRightbar: () => void
+        beginNavigation: () => AbortSignal
       } | undefined
       let mobileController: { getSnapshot: () => { detailsOpen: boolean } } | undefined
       const ctx = {
@@ -440,6 +441,15 @@ describe('dedicated mobile layout boot', () => {
       expect(mobileController?.getSnapshot()).toMatchObject({ detailsOpen: true })
       layout?.closeRightbar()
       expect(mobileController?.getSnapshot()).toMatchObject({ detailsOpen: false })
+
+      // The new-session button goes startSession -> openWorkspace ->
+      // ctx.layout.beginNavigation(); a missing method made it silently no-op.
+      const first = layout?.beginNavigation()
+      const second = layout?.beginNavigation()
+      expect(first).toBeInstanceOf(AbortSignal)
+      expect(first?.aborted).toBe(true)
+      expect(second?.aborted).toBe(false)
+      expect(AbortSignal.any([second as AbortSignal]).aborted).toBe(false)
 
       const source = readFileSync(new URL('../src/mobile-layout.ts', import.meta.url), 'utf8')
       expect(source).toContain("entryKey: state.panelInfo.activePanelId ?? 'conversation'")
