@@ -11,8 +11,20 @@ interface SessionState {
 }
 
 interface MobileRootProps {
-  readonly renderSlot: (name: string, owner: Record<string, unknown>) => ReactNode
+  readonly renderSlot: (
+    name: string,
+    owner: Record<string, unknown>,
+    options?: { readonly entryKey?: string | null },
+  ) => ReactNode
   readonly useSessions: <T>(selector: (state: SessionState) => T) => T
+}
+
+/** Root contribution carrying one observable hook into the standard kit. */
+interface RootHookContribution {
+  readonly hooks: Readonly<Record<string, {
+    readonly getSnapshot: () => unknown
+    readonly subscribe: (listener: () => void) => () => void
+  }>>
 }
 
 interface MobileClientContext {
@@ -21,6 +33,11 @@ interface MobileClientContext {
   readonly reflect: { provide: (name: string, value: unknown) => () => void | Promise<void> }
   readonly slots: {
     register: (options: Record<string, unknown>, component: (props: MobileRootProps) => ReactNode) => () => void
+    /**
+     * Publish a root standard hook. The official layout owns `panelInfo`, so
+     * replacing that module means replacing the owner too.
+     */
+    provideRoot: (contribution: RootHookContribution) => () => void
   }
   readonly theme: { getTheme: () => ThemeSnapshot }
 }
@@ -35,6 +52,15 @@ interface ThemeSnapshot {
 interface LayoutSnapshot {
   readonly sidebarOpen: boolean
   readonly detailsOpen: boolean
+  readonly panelInfo: PanelInfoSnapshot
+}
+
+/**
+ * Panel selection as the standard `usePanelInfo` hook reports it: a null
+ * `activePanelId` means the conversation owns the center column.
+ */
+interface PanelInfoSnapshot {
+  readonly activePanelId: string | null
 }
 
 /**
@@ -68,7 +94,11 @@ class MobileLayoutController {
   // Wide viewports start with the persistent sidebar open; applying the
   // layout again (reconnect, refocus) reuses the module singleton below,
   // so an explicit user collapse is never reset.
-  private snapshot: LayoutSnapshot = Object.freeze({ sidebarOpen: viewportIsWide(), detailsOpen: false })
+  private snapshot: LayoutSnapshot = Object.freeze({
+    sidebarOpen: viewportIsWide(),
+    detailsOpen: false,
+    panelInfo: Object.freeze({ activePanelId: null }),
+  })
   private readonly listeners = new Set<() => void>()
 
   readonly subscribe = (listener: () => void): (() => void) => {
@@ -94,9 +124,43 @@ class MobileLayoutController {
     this.update({ sidebarOpen: false })
   }
 
+  /**
+   * Show the right panel. The official controller tracks a persistent column
+   * here; this layout always renders the panel as the details overlay, so both
+   * the track and fullscreen requests open the same drawer.
+   */
+  openRightbar(_track?: boolean, _fullscreen?: boolean): void {
+    this.openDetails()
+  }
+
+  /** Hide the right panel. */
+  closeRightbar(): void {
+    this.closeDetails()
+  }
+
+  /**
+   * Select the main panel rendered in the center column; null means the
+   * conversation. Mirrors the official LayoutController so the `panelInfo`
+   * root hook stays truthful.
+   */
+  selectPanel(panelId: string | null): void {
+    if (this.snapshot.panelInfo.activePanelId === panelId) return
+    this.update({ panelInfo: Object.freeze({ activePanelId: panelId }) })
+  }
+
+  /** Drop a selected panel once no main-slot entry declares it. */
+  retainMainPanels(panelIds: readonly string[]): void {
+    const active = this.snapshot.panelInfo.activePanelId
+    if (active !== null && !panelIds.includes(active)) this.selectPanel(null)
+  }
+
   private update(next: Partial<LayoutSnapshot>): void {
     const snapshot = Object.freeze({ ...this.snapshot, ...next })
-    if (snapshot.sidebarOpen === this.snapshot.sidebarOpen && snapshot.detailsOpen === this.snapshot.detailsOpen) return
+    if (
+      snapshot.sidebarOpen === this.snapshot.sidebarOpen
+      && snapshot.detailsOpen === this.snapshot.detailsOpen
+      && snapshot.panelInfo === this.snapshot.panelInfo
+    ) return
     this.snapshot = snapshot
     for (const listener of this.listeners) listener()
   }
@@ -290,7 +354,8 @@ function MobileAppFrame(props: MobileRootProps & { readonly controller: MobileLa
   }
 
   return createElement('div', { className: 'dshm-shell', lang: language },
-    createElement('main', { className: 'dshm-main', 'data-dsh-mobile-session': activeSessionId }, props.renderSlot('conversation', {})),
+    createElement('main', { className: 'dshm-main', 'data-dsh-mobile-session': activeSessionId },
+      props.renderSlot('main', {}, { entryKey: state.panelInfo.activePanelId ?? 'conversation' })),
     createElement('button', {
       'aria-label': messages.closePanels,
       className: 'dshm-scrim',
@@ -325,9 +390,14 @@ function MobileAppFrame(props: MobileRootProps & { readonly controller: MobileLa
       props.renderSlot('rightbar', {
         width: Math.min(window.innerWidth * 0.94, 460),
         viewportWidth: window.innerWidth,
-        // Right track needs ~300px next to a ~400px center; below that the
-        // column cannot show and narrow phones see the drawer overlay instead.
-        canShow: window.innerWidth >= 720,
+        // The official frame reports whether a persistent column still fits
+        // (normal.rightbar > 0); this layout renders the right panel in the
+        // details overlay, which needs no column space. Reporting false would
+        // make RightbarSeat force the surface closed immediately after opening
+        // it (ui-sidebar-right: `shown && !fullscreen && !canShow` ->
+        // actions.setExpanded(false)), so the panel could never stay open on a
+        // phone-width viewport.
+        canShow: true,
       }),
     ] : undefined),
     createElement('div', { className: 'dshm-overlay', 'data-shell-overlay': true }, props.renderSlot('shell.overlay', {})),
@@ -348,11 +418,23 @@ export function apply(ctx: MobileClientContext): void {
     style.textContent = MOBILE_LAYOUT_STYLES
     document.head.append(style)
     const disposeService = ctx.reflect.provide('layout', controller)
+    // The official layout owns the root `panelInfo` hook; replacing the layout
+    // module means replacing that owner. Without it every registration that
+    // declares the standard `usePanelInfo` prop fails assembly
+    // ("strict standard hook 'panelInfo' has no source") and renders as a dead
+    // cell — the workspace sidebar's session list lives exactly there.
+    const disposePanelInfo = ctx.slots.provideRoot({ hooks: { panelInfo: {
+      getSnapshot: () => controller.getSnapshot().panelInfo,
+      subscribe: (listener: () => void) => controller.subscribe(listener),
+    } } })
     const disposeRoot = ctx.slots.register({
       name: 'root',
       children: {
         sidebar: { kind: 'single', scope: 'root' },
         conversation: { kind: 'single', scope: 'session-maybe' },
+        // The conversation panel moved into this keyed slot in DSH 0.1.5;
+        // without the declaration the center column stays blank.
+        main: { kind: 'keyed', scope: 'root' },
         rightbar: { kind: 'single', scope: 'session' },
         details: { kind: 'single', scope: 'session' },
         'shell.overlay': { kind: 'list', scope: 'root' },
@@ -360,6 +442,7 @@ export function apply(ctx: MobileClientContext): void {
     }, props => createElement(MobileAppFrame, { ...props, controller }))
     return () => {
       disposeRoot()
+      disposePanelInfo()
       void disposeService()
       style.remove()
     }
