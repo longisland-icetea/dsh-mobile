@@ -186,6 +186,8 @@ interface StoredMobileBootBatch {
   gzipBody?: Buffer
   etag?: string
   layoutMtimeMs?: number
+  /** In-flight assembly shared by every concurrent requester of this batch. */
+  assembly?: Promise<Buffer>
 }
 
 const gzipBuffer = promisify(gzip)
@@ -1702,16 +1704,33 @@ export class MobileAccessGateway {
     try {
       const layoutStat = await stat(this.config.mobileLayoutFile)
       if (stored.body === undefined || stored.etag === undefined || stored.layoutMtimeMs !== layoutStat.mtimeMs) {
-        const body = await this.assembleMobileBootBatch(stored.plan, operation.signal)
-        stored.body = body
-        delete stored.gzipBody
-        stored.etag = createHash('sha256').update(body).digest('hex')
-        stored.layoutMtimeMs = layoutStat.mtimeMs
+        // Deduplicate concurrent requests for the same batch: without this,
+        // every request arriving before the first assembly settles starts its
+        // own full fan-out over all client entries — a thundering herd that
+        // overwhelms the upstream and 502s the batch for everyone.
+        stored.assembly ??= (async () => {
+          const body = await this.assembleMobileBootBatch(stored.plan, operation.signal)
+          stored.body = body
+          delete stored.gzipBody
+          stored.etag = createHash('sha256').update(body).digest('hex')
+          stored.layoutMtimeMs = layoutStat.mtimeMs
+          return body
+        })()
+        const task = stored.assembly
+        try {
+          await task
+        } finally {
+          if (stored.assembly === task) delete stored.assembly
+        }
       }
       const compressed = acceptsGzip(request.headers['accept-encoding'])
+      // The assembly above assigns stored.body; TypeScript cannot narrow a
+      // property written inside an awaited closure, so read it once here.
+      const assembled = stored.body
+      if (assembled === undefined) throw new HttpError(502, 'upstream_unavailable')
       const body = compressed
-        ? stored.gzipBody ??= await gzipBuffer(stored.body)
-        : stored.body
+        ? stored.gzipBody ??= await gzipBuffer(assembled)
+        : assembled
       const etag = compressed ? `${stored.etag}-gzip` : stored.etag
       const headers: OutgoingHttpHeaders = {
         'Content-Type': 'text/javascript; charset=utf-8',
@@ -1748,14 +1767,46 @@ export class MobileAccessGateway {
         const entry = plan.entries[index]!
         bodies[index] = entry.id === MOBILE_LAYOUT_MODULE
           ? await readFile(this.config.mobileLayoutFile, { signal })
-          : await this.readUpstreamClientBundle(entry.url, signal)
+          : await this.readUpstreamClientBundleWithRetry(entry.url, signal)
         if (bodies[index]!.byteLength > MAX_MOBILE_BOOT_ENTRY_BYTES) throw new HttpError(502, 'upstream_unavailable')
       }
     }
-    await Promise.all(Array.from({ length: Math.min(8, plan.entries.length) }, worker))
+    // Three workers keep the fan-out gentle: the upstream resets a fraction of
+    // connections when this many entries are pulled at once, and every reset
+    // used to fail the whole batch.
+    await Promise.all(Array.from({ length: Math.min(3, plan.entries.length) }, worker))
     const total = bodies.reduce((bytes, body) => bytes + body.byteLength + 2, 0)
     if (total > MAX_MOBILE_BOOT_BATCH_BYTES) throw new HttpError(502, 'upstream_unavailable')
     return Buffer.concat(bodies.flatMap(body => [body, Buffer.from('\n;\n')]))
+  }
+
+  /**
+   * Read one upstream bundle, retrying transient connection failures.
+   *
+   * Assembling a batch fans out over every client entry, and the upstream
+   * resets a fraction of those connections before sending a byte
+   * (`read ECONNRESET`, recv=0) — randomly, on any entry, at any concurrency.
+   * A single such reset used to fail the whole batch with 502
+   * `upstream_unavailable`, surfacing in the browser as "bundle script
+   * /mobile-access/mobile-boot/<hash>.js failed to load". Retrying recovers
+   * every observed reset; a genuine upstream error still fails.
+   */
+  private async readUpstreamClientBundleWithRetry(source: string, signal: AbortSignal): Promise<Buffer> {
+    const attempts = 4
+    let lastError: unknown
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        return await this.readUpstreamClientBundle(source, signal)
+      } catch (error) {
+        lastError = error
+        if (signal.aborted || attempt === attempts) throw error
+        // Only transient transport failures are worth retrying; a deterministic
+        // rejection (bad source, oversized body, non-200) fails as before.
+        if (error instanceof HttpError && error.code !== 'upstream_unavailable') throw error
+        await new Promise(resolve => setTimeout(resolve, 150 * attempt))
+      }
+    }
+    throw lastError
   }
 
   private async readUpstreamClientBundle(source: string, signal: AbortSignal): Promise<Buffer> {
