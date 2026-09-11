@@ -3,7 +3,7 @@ import { runInNewContext } from 'node:vm'
 import { describe, expect, it, vi } from 'vitest'
 import { rewriteMobileIndex } from '../src/gateway.js'
 import { CSRF_COOKIE, CSRF_HEADER } from '../src/http-security.js'
-import { MOBILE_LAYOUT_MESSAGES, MOBILE_LAYOUT_STYLES, WIDE_LAYOUT_MIN_WIDTH_PX, isWideViewportLayout, resolveMobileLayoutLanguage } from '../src/mobile-layout.js'
+import { MOBILE_LAYOUT_MESSAGES, MOBILE_LAYOUT_STYLES, WIDE_LAYOUT_MIN_WIDTH_PX, apply as applyMobileLayout, isWideViewportLayout, resolveMobileLayoutLanguage } from '../src/mobile-layout.js'
 
 function index(entries: unknown[]): string {
   return `<!doctype html><html><head><script>window.__DSH_BOOT__ = ${JSON.stringify({ rev: 'stock', entries })};</script></head><body></body></html>`
@@ -11,6 +11,44 @@ function index(entries: unknown[]): string {
 
 function currentIndex(entries: unknown[]): string {
   return `<!doctype html><html><head><script>globalThis["__DSH_BOOT__"] = ${JSON.stringify({ rev: 'stock', entries })};</script></head><body></body></html>`
+}
+
+/**
+ * Minimal DOM the dedicated layout touches while booting: the style element it
+ * appends, the theme presenter's meta tag, and a narrow-viewport matchMedia.
+ * @returns a disposer restoring every global it replaced.
+ */
+function stubClientGlobals(): () => void {
+  const globals = globalThis as Record<string, unknown>
+  const previous = new Map<string, unknown>()
+  const define = (name: string, value: unknown): void => {
+    if (!previous.has(name)) previous.set(name, globals[name])
+    globals[name] = value
+  }
+  const style = { dataset: {}, style: {}, setAttribute() {}, remove() {} }
+  const meta = { name: '', content: '', isConnected: false, append() {}, remove() {} }
+  define('document', {
+    documentElement: { style: { setProperty() {}, removeProperty() {} }, lang: 'en' },
+    body: { style: { setProperty() {}, removeProperty() {} }, toggleAttribute() {}, removeAttribute() {}, backgroundColor: '' },
+    head: { append() {} },
+    createElement: (tag: string) => tag === 'meta' ? meta : style,
+    querySelector: () => null,
+    title: '',
+  })
+  define('window', {
+    innerWidth: 390,
+    matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
+    addEventListener() {},
+    setInterval: () => 0,
+    clearInterval() {},
+  })
+  define('getComputedStyle', () => ({ backgroundColor: '' }))
+  return () => {
+    for (const [name, value] of previous) {
+      if (value === undefined) delete globals[name]
+      else globals[name] = value
+    }
+  }
 }
 
 interface BootEntry {
@@ -346,6 +384,129 @@ describe('dedicated mobile layout boot', () => {
     expect(source).toContain("event.target.closest('button[aria-haspopup=\"listbox\"]')")
     expect(source).toContain("target.matches('input,textarea') || target.isContentEditable")
     expect(source).toContain("active.matches('input,textarea') || active.isContentEditable")
+  })
+
+  it('publishes the root panelInfo hook the official layout owns', () => {
+    const restore = stubClientGlobals()
+    try {
+      const cleanups: Array<() => void> = []
+      const mainEntries: Array<{ options: { key?: string } }> = [{ options: { key: 'alpha' } }]
+      let notifyMainEntries = (): void => {}
+      let root: { children: Record<string, { kind: string; scope: string }> } | undefined
+      let contribution: { hooks: { panelInfo: { getSnapshot: () => { activePanelId: string | null }, subscribe: (listener: () => void) => () => void } } } | undefined
+      let layout: {
+        selectPanel: (id: string | null) => void
+        retainMainPanels: (ids: readonly string[]) => void
+        openRightbar: (track?: boolean, fullscreen?: boolean) => void
+        closeRightbar: () => void
+        beginNavigation: () => AbortSignal
+      } | undefined
+      let mobileController: { getSnapshot: () => { detailsOpen: boolean } } | undefined
+      const ctx = {
+        effect: (effect: () => void | (() => void)) => {
+          const cleanup = effect()
+          if (typeof cleanup === 'function') cleanups.push(cleanup)
+        },
+        on: () => () => {},
+        reflect: { provide: (name: string, value: unknown) => {
+          if (name !== 'layout') return () => {}
+          layout = value as typeof layout
+          mobileController = value as typeof mobileController
+          return () => {}
+        } },
+        slots: {
+          register: (options: Record<string, unknown>) => { root = options as typeof root; return () => {} },
+          provideRoot: (value: unknown) => { contribution = value as typeof contribution; return () => {} },
+          entries: (name: string) => name === 'main' ? mainEntries : [],
+          subscribe: (name: string, listener: () => void) => {
+            if (name === 'main') notifyMainEntries = listener
+            return () => { notifyMainEntries = () => {} }
+          },
+        },
+        theme: { getTheme: () => ({ active: { colorScheme: 'light' as const, tokens: {} } }) },
+      }
+      applyMobileLayout(ctx as never)
+
+      // The conversation panel moved into this keyed slot in DSH 0.1.5.
+      expect(root?.children.main?.kind).toBe('keyed')
+      expect(root?.children.main?.scope).toBe('root')
+      expect(Object.keys(root?.children ?? {})).toContain('conversation')
+      expect(root?.children.rightbar).toEqual({ kind: 'single', scope: 'root' })
+
+      // Missing this hook fails assembly for every usePanelInfo registration.
+      const panelInfo = contribution?.hooks.panelInfo
+      expect(panelInfo).toBeDefined()
+      expect(panelInfo?.getSnapshot()).toEqual({ activePanelId: null })
+
+      const seen: Array<{ activePanelId: string | null }> = []
+      panelInfo?.subscribe(() => { seen.push(panelInfo.getSnapshot()) })
+      layout?.selectPanel('alpha')
+      mainEntries.splice(0, mainEntries.length, { options: { key: 'beta' } })
+      // Validation reads the live registry instead of waiting for its batched
+      // subscription notification.
+      layout?.selectPanel('beta')
+      expect(() => { layout?.selectPanel('missing') }).toThrow('main panel "missing" is not registered')
+      mainEntries.splice(0)
+      notifyMainEntries()
+      expect(seen).toEqual([{ activePanelId: 'alpha' }, { activePanelId: 'beta' }, { activePanelId: null }])
+
+      // The right panel (dsh-better-sidebar and friends) drives the drawer
+      // through these two; without them syncPresentation throws.
+      expect(typeof layout?.openRightbar).toBe('function')
+      expect(typeof layout?.closeRightbar).toBe('function')
+      layout?.openRightbar(true, false)
+      expect(mobileController?.getSnapshot()).toMatchObject({ detailsOpen: true })
+      layout?.closeRightbar()
+      expect(mobileController?.getSnapshot()).toMatchObject({ detailsOpen: false })
+
+      // The new-session button goes startSession -> openWorkspace ->
+      // ctx.layout.beginNavigation(); a missing method made it silently no-op.
+      const first = layout?.beginNavigation()
+      const second = layout?.beginNavigation()
+      expect(first).toBeInstanceOf(AbortSignal)
+      expect(first?.aborted).toBe(true)
+      expect(second?.aborted).toBe(false)
+      expect(AbortSignal.any([second as AbortSignal]).aborted).toBe(false)
+
+      for (const cleanup of cleanups.reverse()) cleanup()
+      expect(second?.aborted).toBe(true)
+
+      const source = readFileSync(new URL('../src/mobile-layout.ts', import.meta.url), 'utf8')
+      expect(source).toContain("entryKey: state.panelInfo.activePanelId ?? 'conversation'")
+      expect(source).toContain("fallback: props.renderSlot('conversation', {})")
+      expect(source).toContain("hasSession ? props.renderSlot('details', {}) : undefined")
+      expect(source).toContain('disposePanelInfo()')
+      // A phone-width viewport must still report room: reporting false makes
+      // RightbarSeat collapse the surface right after it opens.
+      expect(source).toContain('canShow: true')
+      expect(source).not.toContain('canShow: window.innerWidth >=')
+    } finally {
+      restore()
+    }
+  })
+
+  it('keeps the legacy layout usable when the renderer cannot publish root hooks', () => {
+    const restore = stubClientGlobals()
+    const cleanups: Array<() => void> = []
+    try {
+      expect(() => { applyMobileLayout({
+        effect: (effect: () => void | (() => void)) => {
+          const cleanup = effect()
+          if (typeof cleanup === 'function') cleanups.push(cleanup)
+        },
+        on: () => () => {},
+        reflect: { provide: () => () => {} },
+        slots: {
+          register: () => () => {},
+          entries: () => [],
+          subscribe: () => () => {},
+        },
+        theme: { getTheme: () => ({ active: { colorScheme: 'light' as const, tokens: {} } }) },
+      } as never) }).not.toThrow()
+    } finally {
+      for (const cleanup of cleanups.reverse()) cleanup()
+      restore()
+    }
   })
 
   it('fails closed when the upstream page cannot identify one layout module', () => {
