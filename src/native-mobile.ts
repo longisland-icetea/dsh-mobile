@@ -16,7 +16,7 @@ export const NATIVE_MOBILE_STYLES = `
    still collapsed the sidebar. Keep the neutral state explicitly invisible —
    the query restores the fixed scrim, and its more specific [hidden] rule
    keeps winning there. */
-.dsh-native-mobile-backdrop { display:none; }
+.dsh-native-mobile-backdrop,.dsh-mobile-branch-toast,.dsh-mobile-media-toast { display:none; }
 @media ${NATIVE_MOBILE_OVERLAY_QUERY} {
   html.dsh-native-mobile-active,html.dsh-native-mobile-active body { width:100%; height:100%; overflow:hidden; }
   html.dsh-native-mobile-active { --dsh-mobile-motion-duration:200ms; --dsh-mobile-motion-ease:cubic-bezier(.22,1,.36,1); }
@@ -145,7 +145,7 @@ export const NATIVE_MOBILE_STYLES = `
   [data-dsh-mobile-center] [role="dialog"][aria-label*="Context"] [class*="_rows"] > [class*="_row"] { display:flex !important; align-items:center !important; justify-content:space-between !important; width:100% !important; min-width:0 !important; white-space:nowrap !important; }
   [data-dsh-mobile-center] [role="dialog"][aria-label*="上下文"] :is(dt,dd),
   [data-dsh-mobile-center] [role="dialog"][aria-label*="Context"] :is(dt,dd) { white-space:nowrap !important; word-break:keep-all !important; }
-  .dsh-mobile-branch-toast,.dsh-mobile-media-toast { position:fixed; z-index:330; top:max(12px,env(safe-area-inset-top)); left:50%; max-width:calc(100vw - 32px); box-sizing:border-box; padding:7px 14px; border:1px solid rgb(15 23 42 / 10%); border-radius:999px; background:rgb(15 23 42 / 92%); color:#fff; font-size:13px; line-height:20px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:0; pointer-events:none; transform:translate(-50%,-8px); transition:opacity 160ms ease,transform 160ms ease; }
+  .dsh-mobile-branch-toast,.dsh-mobile-media-toast { display:block; position:fixed; z-index:330; top:max(12px,env(safe-area-inset-top)); left:50%; max-width:calc(100vw - 32px); box-sizing:border-box; padding:7px 14px; border:1px solid rgb(15 23 42 / 10%); border-radius:999px; background:rgb(15 23 42 / 92%); color:#fff; font-size:13px; line-height:20px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:0; pointer-events:none; transform:translate(-50%,-8px); transition:opacity 160ms ease,transform 160ms ease; }
   .dsh-mobile-branch-toast[data-visible="true"],.dsh-mobile-media-toast[data-visible="true"] { opacity:1; transform:translate(-50%,0); }
   .dsh-mobile-media-shortcuts { box-sizing:border-box; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; width:100%; padding:4px 4px 8px; margin-bottom:4px; border-bottom:1px solid var(--dsw-alias-border-inverted,var(--dsw-alias-border-subtle,rgb(148 163 184 / 28%))); }
   .dsh-mobile-media-action { box-sizing:border-box; display:flex; align-items:center; justify-content:flex-start; gap:8px; width:100%; min-width:0; min-height:44px; padding:8px 10px; border:0; border-radius:10px; background:var(--dsw-alias-interactive-bg-hover,rgb(148 163 184 / 12%)); color:var(--dsw-alias-label-primary,inherit); cursor:pointer; font:inherit; font-size:14px; line-height:22px; text-align:left; touch-action:manipulation; }
